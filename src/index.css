@@ -2250,6 +2250,12 @@ button.mobile-nav-link span {
   z-index: 1030;
 }
 
+@media (min-width: 1025px) {
+  .sidebar-backdrop {
+    display: none !important;
+  }
+}
+
 .sidebar-header {
   padding: 18px 14px;
   display: flex;

@@ -57,7 +57,7 @@ export default function SuperAdminSidebar({ isOpen, onClose, user, onLogout }) {
   const isNotifications = normalizedPath.includes('notification');
 
   const handleLinkClick = () => {
-    if (onClose && window.innerWidth <= 1024) {
+    if (onClose) {
       onClose();
     }
   };

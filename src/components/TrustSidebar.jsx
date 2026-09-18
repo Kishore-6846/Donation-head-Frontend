@@ -100,7 +100,7 @@ export default function TrustSidebar({ isOpen, onClose, user, onLogout }) {
     !normalizedPath.includes('report');
 
   const handleLinkClick = () => {
-    if (onClose && window.innerWidth <= 1024) {
+    if (onClose) {
       onClose();
     }
   };

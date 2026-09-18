@@ -259,14 +259,14 @@ export default function RegisterPage({ onLoginSuccess }) {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 15px', backgroundColor: '#f8fafc' }}>
         <div style={{ width: '100%', maxWidth: '820px' }}>
           <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.08)', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-            
+
             {/* Green Header Banner */}
             <div style={{ backgroundColor: '#00a651', color: '#ffffff', textAlign: 'center', padding: '26px 20px' }}>
               <h2 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px 0', letterSpacing: '-0.3px' }}>
-                Create Your Account
+                Create Your Admin Account
               </h2>
               <p style={{ fontSize: '15px', fontWeight: '600', margin: 0, opacity: 0.95 }}>
-                Admin Portal
+                Register to Admin Portal
               </p>
             </div>
 
@@ -656,7 +656,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                         </div>
                       )}
                     </div>
-                    <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '6px', marginBottom: 0 }}>
+                    {/* <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '6px', marginBottom: 0 }}>
                       Your logo may be displayed in{' '}
                       <a
                         href="https://donationreceipt.in/our-clients.php"
@@ -667,7 +667,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                         Our Clients
                       </a>{' '}
                       section.
-                    </p>
+                    </p> */}
                   </div>
                 </div>
 

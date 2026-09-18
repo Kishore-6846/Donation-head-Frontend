@@ -17,10 +17,13 @@ const DEFAULT_HEADS = [
 ];
 
 const deduplicateHeads = (list) => {
+  if (!Array.isArray(list)) return [];
   const seen = new Set();
   return list.filter(item => {
-    if (!item || !item.name) return false;
-    const base = (item.rawName || item.name).replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+    if (!item) return false;
+    const raw = String(item.rawName || item.name || '').trim();
+    if (!raw) return false;
+    const base = raw.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
     if (seen.has(base)) return false;
     seen.add(base);
     return true;

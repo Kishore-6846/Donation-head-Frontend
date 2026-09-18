@@ -43,13 +43,15 @@ const DEFAULT_HEADS = [
 ];
 
 const deduplicateHeadsList = (list) => {
+  if (!Array.isArray(list)) return [];
   const seenIds = new Set();
   const seenBases = new Set();
   const result = [];
   for (const item of list) {
-    if (!item) continue;
+    if (!item || typeof item !== 'object') continue;
     const id = String(item._id || item.id || '').trim();
     const raw = String(item.rawName || item.name || '').trim();
+    if (!raw && !id) continue;
     const base = raw.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
 
     if (id && seenIds.has(id)) continue;
@@ -57,7 +59,12 @@ const deduplicateHeadsList = (list) => {
 
     if (id) seenIds.add(id);
     if (base) seenBases.add(base);
-    result.push(item);
+    result.push({
+      ...item,
+      _id: id || `dh_${Math.random()}`,
+      name: String(item.name || item.rawName || raw || 'Donation Head').trim(),
+      rawName: raw || String(item.name || 'Donation Head').trim()
+    });
   }
   return result;
 };
@@ -65,7 +72,8 @@ const deduplicateHeadsList = (list) => {
 const getInitialHeads = () => {
   try {
     const custom = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
-    return deduplicateHeadsList([...custom, ...DEFAULT_HEADS]);
+    const safeCustom = Array.isArray(custom) ? custom : [];
+    return deduplicateHeadsList([...safeCustom, ...DEFAULT_HEADS]);
   } catch (e) {
     return DEFAULT_HEADS;
   }
@@ -107,10 +115,11 @@ export default function DonationHeadsPage({ user }) {
     try {
       let custom = [];
       try {
-        custom = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+        const stored = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+        custom = Array.isArray(stored) ? stored : [];
       } catch (e) {}
 
-      let url = `/api/donation-heads?search=${encodeURIComponent(searchTerm)}&limit=100`;
+      let url = `/api/donation-heads?search=${encodeURIComponent(searchTerm || '')}&limit=100`;
       if (isSuperAdmin) {
         url += '&isSuperAdmin=true';
       } else if (activeTrustName) {
@@ -119,14 +128,17 @@ export default function DonationHeadsPage({ user }) {
 
       const res = await fetch(url);
       const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
+      if (data && data.success && Array.isArray(data.data)) {
         try {
           const backendBases = new Set(
-            data.data.map(d => (d.rawName || d.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase())
+            data.data
+              .map(d => String(d?.rawName || d?.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase())
+              .filter(Boolean)
           );
           const cleanedCustom = custom.filter(c => {
-            const cBase = (c.rawName || c.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
-            return !backendBases.has(cBase);
+            if (!c) return false;
+            const cBase = String(c.rawName || c.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+            return cBase && !backendBases.has(cBase);
           });
           localStorage.setItem('custom_donation_heads', JSON.stringify(cleanedCustom));
         } catch (e) {}
@@ -141,7 +153,8 @@ export default function DonationHeadsPage({ user }) {
       console.error(e);
       let custom = [];
       try {
-        custom = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+        const stored = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+        custom = Array.isArray(stored) ? stored : [];
       } catch (err) {}
       setHeads(deduplicateHeadsList([...custom, ...DEFAULT_HEADS]));
     }
@@ -216,17 +229,24 @@ export default function DonationHeadsPage({ user }) {
     }
   };
 
-  // Filter and sort logic
-  let processedHeads = heads.filter(h =>
-    h.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter and sort logic with safety fallbacks
+  let processedHeads = (heads || []).filter(h => {
+    if (!h) return false;
+    const hName = String(h.name || h.rawName || '').toLowerCase();
+    const term = String(searchTerm || '').toLowerCase().trim();
+    return !term || hName.includes(term);
+  });
 
   if (sortField === 'name') {
-    processedHeads.sort((a, b) => sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+    processedHeads.sort((a, b) => {
+      const nameA = String(a?.name || a?.rawName || '');
+      const nameB = String(b?.name || b?.rawName || '');
+      return sortAsc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+    });
   } else if (sortField === 'date') {
     processedHeads.sort((a, b) => {
-      const dA = new Date(a.createdAt || 0);
-      const dB = new Date(b.createdAt || 0);
+      const dA = new Date(a?.createdAt || 0);
+      const dB = new Date(b?.createdAt || 0);
       return sortAsc ? dA - dB : dB - dA;
     });
   }
@@ -362,14 +382,11 @@ export default function DonationHeadsPage({ user }) {
             <tbody>
               {currentEntries.map((head, idx) => (
                 <tr key={head._id || idx}>
-                  <td>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#212529', fontWeight: '500' }}>
-                      <Shield size={12} color="#212529" fill="#212529" />
-                      {startIndex + idx + 1}
-                    </span>
+                  <td style={{ fontWeight: '600', color: '#475569' }}>
+                    {startIndex + idx + 1}
                   </td>
-                  <td style={{ fontWeight: '400', color: '#212529' }}>{head.name}</td>
-                  <td style={{ color: '#212529' }}>{head.formattedDate || '16-04-2023 10:18am'}</td>
+                  <td style={{ fontWeight: '500', color: '#1e293b' }}>{head.name || head.rawName || 'Donation Head'}</td>
+                  <td style={{ color: '#475569' }}>{head.formattedDate || '16-04-2023 10:18am'}</td>
                   <td>
                     <div className="actions-cell">
                       <button
@@ -384,7 +401,7 @@ export default function DonationHeadsPage({ user }) {
                         type="button"
                         className="action-btn green-del"
                         title="Delete"
-                        onClick={() => handleDeleteClick(head._id, head.name)}
+                        onClick={() => handleDeleteClick(head._id, head.name || head.rawName || '')}
                       >
                         <Trash2 size={13} strokeWidth={2.5} />
                       </button>
