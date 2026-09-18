@@ -27,9 +27,12 @@ export default function AllReceiptsAdminPage() {
   const fetchAllReceipts = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const [receiptsRes, usersRes] = await Promise.allSettled([
-        fetch('/api/receipts?limit=500'),
-        fetch('/api/users')
+        fetch('/api/receipts?isSuperAdmin=true&limit=1000', { headers: authHeaders }),
+        fetch('/api/users', { headers: authHeaders })
       ]);
 
       let fetchedReceipts = [];

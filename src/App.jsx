@@ -459,6 +459,14 @@ function AppContent() {
               <Route path="/new-receipt-type" element={<Navigate to="/superadmin/all-receipts" replace />} />
 
               <Route path="/superadmin/all-receipts" element={<AllReceiptsAdminPage />} />
+              <Route path="/superadmin/all_receipts" element={<AllReceiptsAdminPage />} />
+              <Route path="/superadmin/donation-receipts" element={<AllReceiptsAdminPage />} />
+              <Route path="/superadmin/donation-receipt" element={<AllReceiptsAdminPage />} />
+              <Route path="/superadmin/donation_receipt" element={<AllReceiptsAdminPage />} />
+              <Route path="/superadmin/donation_receipts" element={<AllReceiptsAdminPage />} />
+              <Route path="/superadmin/donation-receipts.php" element={<Navigate to="/superadmin/all-receipts" replace />} />
+              <Route path="/superadmin/donation-receipt.php" element={<Navigate to="/superadmin/all-receipts" replace />} />
+              <Route path="/superadmin/all-receipts.php" element={<Navigate to="/superadmin/all-receipts" replace />} />
 
               <Route path="/superadmin/notifications" element={<NotificationsManagementPage />} />
               <Route path="/superadmin/new-notification" element={<NewNotificationPage />} />
