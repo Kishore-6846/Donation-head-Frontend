@@ -1,0 +1,32 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://donation-head-backend.onrender.com/api/$1"
+    },
+    {
+      "source": "/trust/api/(.*)",
+      "destination": "https://donation-head-backend.onrender.com/trust/api/$1"
+    },
+    {
+      "source": "/superadmin/api/(.*)",
+      "destination": "https://donation-head-backend.onrender.com/superadmin/api/$1"
+    },
+    {
+      "source": "/superAdmin/api/(.*)",
+      "destination": "https://donation-head-backend.onrender.com/superAdmin/api/$1"
+    },
+    {
+      "source": "/trust/print-receipt.php",
+      "destination": "https://donation-head-backend.onrender.com/trust/print-receipt.php"
+    },
+    {
+      "source": "/trust/download-invoice",
+      "destination": "https://donation-head-backend.onrender.com/trust/download-invoice"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
