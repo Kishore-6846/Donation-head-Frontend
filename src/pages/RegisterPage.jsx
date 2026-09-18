@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import navLogo from '../assets/Receipt-Nav-Logo.png';
-import { Lock, FileText, CheckCircle2, AlertCircle, Upload, Eye, EyeOff } from 'lucide-react';
+import { Lock, FileText, CheckCircle2, AlertCircle, Upload, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
 
 const INDIAN_STATES = [
   'Andaman Nicobar',
@@ -199,9 +199,25 @@ export default function RegisterPage({ onLoginSuccess }) {
       {/* Main Header */}
       <header style={{ borderBottom: '1px solid #eef2f5', padding: '10px 0' }}>
         <div style={{ maxWidth: '1140px', margin: '0 auto', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Link to="/trust/login" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
-            <img src={navLogo} alt="Donation Receipt" style={{ height: '54px', width: 'auto', objectFit: 'contain' }} />
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Link to="/trust/login" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+              <img src={navLogo} alt="Donation Receipt" style={{ height: '54px', width: 'auto', objectFit: 'contain' }} />
+            </Link>
+            <span
+              style={{
+                backgroundColor: '#ecfdf5',
+                color: '#047857',
+                border: '1px solid #a7f3d0',
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '4px 10px',
+                borderRadius: '20px',
+                letterSpacing: '0.4px'
+              }}
+            >
+              ADMIN PORTAL
+            </span>
+          </div>
 
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <Link
@@ -743,16 +759,28 @@ export default function RegisterPage({ onLoginSuccess }) {
                 padding: '12px',
                 textAlign: 'center',
                 borderTop: '1px solid #eef2f6',
-                fontSize: '12.5px',
-                color: '#6c757d',
+                fontSize: '13px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '6px'
               }}
             >
-              <Lock size={14} color="#00a651" />
-              <span>Secure Registration &nbsp;|&nbsp; SSL Protected</span>
+              <Shield size={14} color="#00a651" />
+              <Link
+                to="/superadmin/login"
+                style={{
+                  color: '#00a651',
+                  fontWeight: '600',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <span>SuperAdmin Login</span>
+                <ArrowRight size={13} />
+              </Link>
             </div>
           </div>
 

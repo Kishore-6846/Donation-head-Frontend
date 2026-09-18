@@ -78,20 +78,17 @@ export default function TrustDashboardPage({ user }) {
   }, []);
 
   useEffect(() => {
-    const effectiveEmail = user?.email || (() => {
-      try {
-        return JSON.parse(localStorage.getItem('user_info') || '{}')?.email || '';
-      } catch (e) {
-        return '';
-      }
+    const localUser = (() => {
+      try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch (e) { return {}; }
     })();
+    const effectiveEmail = (user?.email || localUser?.email || '').trim();
+    const effectiveTrustName = (user?.trustName || localUser?.trustName || (user?.name && !user.name.toLowerCase().includes('super') ? user.name : (localUser?.name && !localUser.name.toLowerCase().includes('super') ? localUser.name : '')) || '').trim();
 
-    const isSuperAdminEmail = effectiveEmail && (effectiveEmail.toLowerCase().includes('superadmin') || effectiveEmail === 'admin@donationreceipt.in');
-    const emailParam = (effectiveEmail && !isSuperAdminEmail)
-      ? `&trustEmail=${encodeURIComponent(effectiveEmail)}`
-      : '';
+    let queryParams = '?status=Active&limit=1000';
+    if (effectiveEmail) queryParams += `&trustEmail=${encodeURIComponent(effectiveEmail)}`;
+    if (effectiveTrustName) queryParams += `&trustName=${encodeURIComponent(effectiveTrustName)}`;
 
-    fetch(`/api/receipts?status=Active&limit=1000${emailParam}`)
+    fetch(`/api/receipts${queryParams}`)
       .then(r => r.json())
       .then(d => {
         if (d.success) {

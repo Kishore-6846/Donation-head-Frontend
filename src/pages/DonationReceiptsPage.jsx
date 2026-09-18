@@ -37,22 +37,19 @@ export default function DonationReceiptsPage({ user }) {
   });
 
 
+  const location = useLocation();
   const localUser = (() => { try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch(e) { return {}; } })();
   const effectiveEmail = (user?.email || localUser?.email || '').trim();
   const effectiveTrustName = (user?.trustName || localUser?.trustName || (user?.name && !user.name.toLowerCase().includes('super') ? user.name : (localUser?.name && !localUser.name.toLowerCase().includes('super') ? localUser.name : '')) || '').trim();
-  const isSuperAdmin = Boolean(
-    (user?.role && user.role.toLowerCase().includes('super')) ||
-    user?.isSuperAdmin ||
-    (localUser?.role && localUser.role.toLowerCase().includes('super')) ||
-    localUser?.isSuperAdmin ||
-    (effectiveEmail && (effectiveEmail.toLowerCase().includes('superadmin') || effectiveEmail === 'admin@donationreceipt.in'))
-  );
+  const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin');
 
   const fetchReceipts = async () => {
     setLoading(true);
     try {
       let url = `/api/receipts?status=${activeTab}&search=${encodeURIComponent(searchTerm)}&limit=100`;
-      if (!isSuperAdmin) {
+      if (isSuperAdmin) {
+        url += '&isSuperAdmin=true';
+      } else {
         if (effectiveEmail) url += `&trustEmail=${encodeURIComponent(effectiveEmail)}`;
         if (effectiveTrustName) url += `&trustName=${encodeURIComponent(effectiveTrustName)}`;
       }
@@ -66,10 +63,11 @@ export default function DonationReceiptsPage({ user }) {
           const eLower = effectiveEmail.toLowerCase();
           const tLower = effectiveTrustName.toLowerCase();
           list = list.filter(r => {
-            const rEmail = (r.trustEmail || r.createdBy || '').toLowerCase();
+            const rEmail = (r.trustEmail || '').toLowerCase();
+            const rCreated = (r.createdBy || '').toLowerCase();
             const rTrust = (r.trustName || '').toLowerCase();
-            const matchEmail = eLower && rEmail && (rEmail === eLower);
-            const matchTrust = tLower && rTrust && (rTrust === tLower);
+            const matchEmail = eLower && (rEmail === eLower || rCreated === eLower);
+            const matchTrust = tLower && tLower !== 'trust organization' && (rTrust === tLower);
             return matchEmail || matchTrust;
           });
         }

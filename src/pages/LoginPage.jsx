@@ -54,9 +54,25 @@ export default function LoginPage({ onLoginSuccess }) {
       {/* Main Header */}
       <header style={{ borderBottom: '1px solid #eef2f5', padding: '10px 0' }}>
         <div style={{ maxWidth: '1140px', margin: '0 auto', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Link to="/trust/login" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
-            <img src={navLogo} alt="Donation Receipt" style={{ height: '54px', width: 'auto', objectFit: 'contain' }} />
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Link to="/trust/login" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+              <img src={navLogo} alt="Donation Receipt" style={{ height: '54px', width: 'auto', objectFit: 'contain' }} />
+            </Link>
+            <span
+              style={{
+                backgroundColor: '#ecfdf5',
+                color: '#047857',
+                border: '1px solid #a7f3d0',
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '4px 10px',
+                borderRadius: '20px',
+                letterSpacing: '0.4px'
+              }}
+            >
+              ADMIN PORTAL
+            </span>
+          </div>
 
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <Link
