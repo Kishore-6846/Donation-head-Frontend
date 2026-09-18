@@ -252,27 +252,19 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
               <hr style={{ border: 'none', borderTop: '1px solid #e9ecef', margin: '24px 0' }} />
 
               {/* Create Account Section */}
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '14px', color: '#495057', marginBottom: '10px' }}>
-                  Need a Super Admin Account?
-                </p>
+              <div style={{ textAlign: 'center', fontSize: '14px', color: '#495057' }}>
+                <span>Need a Super Admin Account? </span>
                 <Link
                   to="/superadmin/register"
                   style={{
-                    display: 'inline-block',
-                    background: 'transparent',
-                    border: '1.5px solid #00a651',
                     color: '#00a651',
-                    padding: '8px 24px',
-                    fontSize: '14px',
                     fontWeight: '600',
-                    borderRadius: '4px',
-                    textDecoration: 'none',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
+                    textDecoration: 'none'
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
                 >
-                  Super Admin SignUp
+                  Sign Up
                 </Link>
               </div>
             </div>

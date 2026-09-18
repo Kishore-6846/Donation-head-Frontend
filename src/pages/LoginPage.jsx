@@ -239,27 +239,19 @@ export default function LoginPage({ onLoginSuccess }) {
               <hr style={{ border: 'none', borderTop: '1px solid #e9ecef', margin: '24px 0' }} />
 
               {/* Create Account Section */}
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '14px', color: '#495057', marginBottom: '10px' }}>
-                  Don't have an account?
-                </p>
+              <div style={{ textAlign: 'center', fontSize: '14px', color: '#495057' }}>
+                <span>Don't have an account? </span>
                 <Link
                   to="/trust/register"
                   style={{
-                    display: 'inline-block',
-                    background: 'transparent',
-                    border: '1.5px solid #00a651',
                     color: '#00a651',
-                    padding: '8px 24px',
-                    fontSize: '14px',
                     fontWeight: '600',
-                    borderRadius: '4px',
-                    textDecoration: 'none',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
+                    textDecoration: 'none'
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
                 >
-                  Create FREE Account
+                  Sign Up
                 </Link>
               </div>
             </div>
