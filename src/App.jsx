@@ -711,8 +711,8 @@ function AppContent() {
               <Route path="/trust/my_subscriptions" element={<MySubscriptionsPage />} />
               <Route path="/trust/my-subscriptions.php" element={<Navigate to="/trust/my-subscriptions" replace />} />
               <Route path="/trust/my_subscriptions.php" element={<Navigate to="/trust/my-subscriptions" replace />} />
-              <Route path="/trust/new-password" element={<NewPasswordPage />} />
-              <Route path="/trust/new_password" element={<NewPasswordPage />} />
+              <Route path="/trust/new-password" element={<NewPasswordPage user={user} />} />
+              <Route path="/trust/new_password" element={<NewPasswordPage user={user} />} />
               <Route path="/trust/new-password.php" element={<Navigate to="/trust/new-password" replace />} />
               <Route path="/trust/new_password.php" element={<Navigate to="/trust/new-password" replace />} />
               <Route path="/superadmin/new-password" element={<NewPasswordPage user={user} />} />

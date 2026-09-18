@@ -11,7 +11,13 @@ import {
   User,
   Megaphone,
   Sparkles,
-  FileText
+  FileText,
+  Building,
+  Mail,
+  Phone,
+  Shield,
+  Calendar,
+  Pencil
 } from 'lucide-react';
 
 // Default donation heads for instant fallback
@@ -80,10 +86,29 @@ export default function TrustDashboardPage({ user }) {
     return () => window.removeEventListener('open-cart-modal', handleOpenCart);
   }, []);
 
+  const localUser = (() => {
+    try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch (e) { return {}; }
+  })();
+
+  const [adminProfile, setAdminProfile] = useState(() => {
+    return { ...localUser, ...(user || {}) };
+  });
+
   useEffect(() => {
-    const localUser = (() => {
-      try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch (e) { return {}; }
-    })();
+    const activeEmail = (user?.email || localUser?.email || '').trim();
+    if (activeEmail) {
+      fetch(`/api/users/${encodeURIComponent(activeEmail)}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.data) {
+            setAdminProfile(prev => ({ ...prev, ...d.data }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user]);
+
+  useEffect(() => {
     const effectiveEmail = (user?.email || localUser?.email || '').trim();
     const effectiveTrustName = (user?.trustName || localUser?.trustName || (user?.name && !user.name.toLowerCase().includes('super') ? user.name : (localUser?.name && !localUser.name.toLowerCase().includes('super') ? localUser.name : '')) || '').trim();
 
@@ -231,27 +256,123 @@ export default function TrustDashboardPage({ user }) {
     }
   };
 
-  const trustName = user?.trustName || user?.name || 'Trust Organization';
+  const effectiveTrustName =
+    adminProfile.trustName ||
+    (adminProfile.name && !adminProfile.name.toLowerCase().includes('super') ? adminProfile.name : '') ||
+    'Trust Organization';
+
+  const effectiveEmail = adminProfile.email || 'admin@trust.org';
+  const effectiveMobile = adminProfile.mobile || adminProfile.phone || '';
+  const effectiveRegNo = adminProfile.registrationNo || '';
+  const effective80G = adminProfile.section80GRegNo || adminProfile.reg12ANo || '';
+  const effectiveContactPerson = adminProfile.contactPerson || (adminProfile.name && !adminProfile.name.toLowerCase().includes('super') ? adminProfile.name : '');
+  const effectiveStatus = adminProfile.status || 'Active';
+  const effectivePlan = adminProfile.plan || 'Standard';
+  const effectiveJoined = adminProfile.joinedDate || 'Recently';
+  const effectiveLogo = adminProfile.logo || '';
 
   return (
     <>
       <div className="dashboard-container-modern">
-      {/* 1. Mint Hero Banner (Matches Screenshot 1) */}
-      <div className="mint-hero-banner">
-        <div className="mint-hero-left">
-          <div className="mint-hero-badge">
-            <Sparkles size={12} />
-            <span>GOOD TO SEE YOU AGAIN!</span>
+      {/* 1. Mint Hero Banner with Trust Profile */}
+      <div className="mint-hero-banner" style={{ marginBottom: '24px' }}>
+        <div className="mint-hero-left" style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '14px',
+              background: effectiveLogo ? '#ffffff' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '26px',
+              fontWeight: 800,
+              boxShadow: '0 8px 16px rgba(16, 185, 129, 0.25)',
+              flexShrink: 0,
+              overflow: 'hidden',
+              border: effectiveLogo ? '2px solid #e2e8f0' : 'none'
+            }}
+          >
+            {effectiveLogo ? (
+              <img
+                src={effectiveLogo}
+                alt={effectiveTrustName}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+            ) : (
+              effectiveTrustName.charAt(0).toUpperCase()
+            )}
           </div>
-          <h1 className="mint-hero-title">Manage Donations. Create Impact.</h1>
-          <p className="mint-hero-subtitle">
-            Welcome to {trustName}. Everything you need to manage your receipts and reports is right here.
-          </p>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
+              <div className="mint-hero-badge">
+                <Building size={13} />
+                <span>TRUST / NGO PROFILE</span>
+              </div>
+              <span className={`badge-pill ${effectiveStatus === 'Active' ? 'badge-success' : (effectiveStatus === 'Trial' ? 'badge-warning' : 'badge-danger')}`}>
+                {effectiveStatus}
+              </span>
+              <span className="badge-pill badge-info" style={{ fontWeight: 600 }}>
+                {effectivePlan} Plan
+              </span>
+            </div>
+            <h1 className="mint-hero-title" style={{ fontSize: '24px', marginBottom: '6px' }}>
+              {effectiveTrustName}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px', color: '#475569', flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Mail size={13} style={{ color: '#10b981' }} /> {effectiveEmail}
+              </span>
+              {effectiveMobile && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Phone size={13} style={{ color: '#10b981' }} /> {effectiveMobile}
+                </span>
+              )}
+              {effectiveRegNo && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontFamily: 'monospace' }}>
+                  <Shield size={13} style={{ color: '#3b82f6' }} /> Reg: {effectiveRegNo}
+                </span>
+              )}
+              {effective80G && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Sparkles size={13} style={{ color: '#10b981' }} /> 80G: {effective80G}
+                </span>
+              )}
+              {effectiveContactPerson && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <User size={13} style={{ color: '#6366f1' }} /> {effectiveContactPerson}
+                </span>
+              )}
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Calendar size={13} style={{ color: '#64748b' }} /> Joined: {effectiveJoined}
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="mint-hero-right">
-          <span className="mint-hero-tagline">
-            Small Contributions Make a Big Difference ♡
-          </span>
+
+        <div className="mint-hero-right" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn-trust-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 16px', fontSize: '13.5px' }}
+            onClick={() => navigate('/trust/my-profile')}
+            title="View Full Trust Profile"
+          >
+            <User size={15} />
+            <span>My Profile</span>
+          </button>
+          <button
+            type="button"
+            className="btn-trust-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', fontSize: '13.5px' }}
+            onClick={() => navigate('/trust/edit-profile')}
+            title="Edit Organization Details"
+          >
+            <Pencil size={15} />
+            <span>Edit Profile</span>
+          </button>
         </div>
       </div>
 

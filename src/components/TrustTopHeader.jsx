@@ -10,7 +10,8 @@ import {
   Menu,
   Sparkles,
   ExternalLink,
-  Pencil
+  Pencil,
+  KeyRound
 } from 'lucide-react';
 
 export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
@@ -257,6 +258,18 @@ export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
                 >
                   <ShieldCheck size={16} />
                   <span style={{ textAlign: 'left', flex: 1 }}>80G Vault</span>
+                </button>
+                <button
+                  type="button"
+                  className="user-dropdown-item"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', textAlign: 'left', width: '100%' }}
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate('/trust/new-password');
+                  }}
+                >
+                  <KeyRound size={16} />
+                  <span style={{ textAlign: 'left', flex: 1 }}>Change Password</span>
                 </button>
                 <div className="user-dropdown-divider" />
                 <button

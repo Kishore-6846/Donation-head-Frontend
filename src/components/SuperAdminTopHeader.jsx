@@ -12,7 +12,8 @@ import {
   ExternalLink,
   Pencil,
   Boxes,
-  Users
+  Users,
+  KeyRound
 } from 'lucide-react';
 
 export default function SuperAdminTopHeader({ user, onLogout, onToggleSidebar }) {
@@ -219,6 +220,18 @@ export default function SuperAdminTopHeader({ user, onLogout, onToggleSidebar })
                 >
                   <ShieldCheck size={16} />
                   <span style={{ textAlign: 'left', flex: 1 }}>Platform Reports</span>
+                </button>
+                <button
+                  type="button"
+                  className="user-dropdown-item"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', textAlign: 'left', width: '100%' }}
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate('/superadmin/new-password');
+                  }}
+                >
+                  <KeyRound size={16} />
+                  <span style={{ textAlign: 'left', flex: 1 }}>Change Password</span>
                 </button>
                 <div className="user-dropdown-divider" />
                 <button

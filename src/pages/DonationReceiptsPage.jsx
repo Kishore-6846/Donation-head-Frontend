@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
 import {
@@ -59,10 +59,11 @@ export default function DonationReceiptsPage({ user }) {
       if (data.success && Array.isArray(data.data)) {
         let list = data.data;
         // Strict tenant isolation guard in Trust Admin panel:
-        if (!isSuperAdmin) {
+        if (!isSuperAdmin && (effectiveEmail || (effectiveTrustName && effectiveTrustName.toLowerCase() !== 'trust organization'))) {
           const eLower = effectiveEmail.toLowerCase();
           const tLower = effectiveTrustName.toLowerCase();
           list = list.filter(r => {
+            if (!r) return false;
             const rEmail = (r.trustEmail || '').toLowerCase();
             const rCreated = (r.createdBy || '').toLowerCase();
             const rTrust = (r.trustName || '').toLowerCase();
@@ -187,16 +188,20 @@ export default function DonationReceiptsPage({ user }) {
   };
 
   // Pagination logic
-  const filtered = receipts.filter(r => {
-    const s = searchTerm.toLowerCase();
-    const phone = (r.phone || r.mobile || '').toLowerCase();
-    const email = (r.email || '').toLowerCase();
+  const filtered = (receipts || []).filter(r => {
+    if (!r) return false;
+    const s = (searchTerm || '').toLowerCase();
+    const phone = String(r.phone || r.mobile || '').toLowerCase();
+    const email = String(r.email || '').toLowerCase();
+    const rNo = String(r.receiptNo || '').toLowerCase();
+    const dName = String(r.donorName || '').toLowerCase();
+    const dHead = String(r.donationHead || '').toLowerCase();
     return (
-      r.receiptNo.toLowerCase().includes(s) ||
-      r.donorName.toLowerCase().includes(s) ||
+      rNo.includes(s) ||
+      dName.includes(s) ||
       phone.includes(s) ||
       email.includes(s) ||
-      (r.donationHead && r.donationHead.toLowerCase().includes(s))
+      dHead.includes(s)
     );
   });
   const totalEntries = filtered.length;

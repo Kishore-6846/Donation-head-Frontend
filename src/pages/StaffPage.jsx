@@ -265,15 +265,6 @@ export default function StaffPage({ user: propUser }) {
         <div className="mint-hero-right" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             type="button"
-            className="btn-trust-primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px', fontSize: '14px' }}
-            onClick={handleOpenAddModal}
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            <span>Add Staff Member</span>
-          </button>
-          <button
-            type="button"
             className="mint-btn-add"
             onClick={() => navigate('/trust/buy-staff-users')}
           >

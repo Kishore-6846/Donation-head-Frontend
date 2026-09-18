@@ -4,7 +4,7 @@ import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
 import { Eye, EyeOff, Sparkles, KeyRound, User } from 'lucide-react';
 
-export default function NewPasswordPage() {
+export default function NewPasswordPage({ user }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin');
@@ -19,7 +19,18 @@ export default function NewPasswordPage() {
     onConfirm: null
   });
 
-  const handleSubmit = (e) => {
+  const localUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user_info') || '{}');
+    } catch (e) {
+      return {};
+    }
+  })();
+
+  const activeUser = user || localUser;
+  const targetEmail = (activeUser?.email || (isSuperAdmin ? 'admin@donationreceipt.in' : '')).trim();
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!newPassword.trim()) {
       setPopup({
@@ -32,18 +43,64 @@ export default function NewPasswordPage() {
       return;
     }
 
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setNewPassword('');
+    if (newPassword.trim().length < 6) {
       setPopup({
         isOpen: true,
-        type: 'success',
-        title: 'Password Updated!',
-        message: 'Your password has been changed successfully.',
+        type: 'error',
+        title: 'Password Too Short',
+        message: 'Password must be at least 6 characters long.',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
       });
-    }, 600);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('token') || '';
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          email: targetEmail,
+          newPassword: newPassword.trim(),
+          isSuperAdmin: isSuperAdmin
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setNewPassword('');
+        setPopup({
+          isOpen: true,
+          type: 'success',
+          title: 'Password Updated!',
+          message: data.message || 'Your password has been changed successfully and updated in your account.',
+          onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+        });
+      } else {
+        setPopup({
+          isOpen: true,
+          type: 'error',
+          title: 'Update Failed',
+          message: data.message || 'Could not update password. Please try again.',
+          onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+        });
+      }
+    } catch (err) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Error',
+        message: err.message || 'An unexpected error occurred.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
