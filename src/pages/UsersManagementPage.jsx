@@ -1,0 +1,491 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Breadcrumb from '../components/Breadcrumb';
+import SimplePopup from '../components/SimplePopup';
+import {
+  Users,
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  CheckCircle2,
+  XCircle,
+  Building,
+  Mail,
+  Phone,
+  RefreshCw,
+  Shield,
+  FileText,
+  UserCheck,
+  Eye,
+  Globe,
+  MapPin,
+  Calendar
+} from 'lucide-react';
+
+export default function UsersManagementPage() {
+  const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [planFilter, setPlanFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+
+  // Modal State
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [formData, setFormData] = useState({
+    trustName: '',
+    contactPerson: '',
+    email: '',
+    mobile: '',
+    password: '',
+    registrationNo: '',
+    panNo: '',
+    fcraNo: '',
+    section80GRegNo: '',
+    plan: 'Standard',
+    status: 'Active'
+  });
+
+  const [popup, setPopup] = useState({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+    showCancel: false,
+    confirmText: 'OK',
+    onConfirm: null
+  });
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/users');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setUsers(data.data);
+      }
+    } catch (e) {
+      console.error('Error fetching users:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const handleOpenCreateModal = () => {
+    setEditingUser(null);
+    setFormData({
+      trustName: '',
+      contactPerson: '',
+      email: '',
+      mobile: '',
+      password: 'Admin@' + Math.floor(1000 + Math.random() * 9000),
+      registrationNo: 'REG-' + Date.now().toString().slice(-6),
+      panNo: '',
+      fcraNo: '',
+      section80GRegNo: '',
+      plan: 'Standard',
+      status: 'Active'
+    });
+    setModalOpen(true);
+  };
+
+  const handleOpenEditModal = (u) => {
+    setEditingUser(u);
+    setFormData({
+      trustName: u.trustName || u.name || '',
+      contactPerson: u.contactPerson || u.name || '',
+      email: u.email || '',
+      mobile: u.mobile || '',
+      password: '',
+      registrationNo: u.registrationNo || '',
+      panNo: u.panNo || '',
+      fcraNo: u.fcraNo || '',
+      section80GRegNo: u.section80GRegNo || '',
+      plan: u.plan || 'Standard',
+      status: u.status || 'Active'
+    });
+    setModalOpen(true);
+  };
+
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    if (!formData.trustName || !formData.email) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Required Fields Missing',
+        message: 'Trust Name and Email ID are mandatory.',
+        confirmText: 'OK',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    try {
+      const url = editingUser ? `/api/users/${editingUser._id}` : '/api/users';
+      const method = editingUser ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setModalOpen(false);
+        fetchUsers();
+        setPopup({
+          isOpen: true,
+          type: 'success',
+          title: editingUser ? 'User Updated' : 'User Created',
+          message: editingUser ? 'Trust details have been updated successfully.' : 'New Trust Admin account has been registered.',
+          confirmText: 'OK',
+          onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+        });
+      } else {
+        setPopup({
+          isOpen: true,
+          type: 'error',
+          title: 'Error',
+          message: data.message || 'Operation failed',
+          confirmText: 'OK',
+          onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Error',
+        message: 'Network error occurred while saving user.',
+        confirmText: 'OK',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+    }
+  };
+
+  const handleToggleStatus = async (u) => {
+    const nextStatus = u.status === 'Active' ? 'Suspended' : 'Active';
+    try {
+      const res = await fetch(`/api/users/${u._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchUsers();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteUser = (u) => {
+    setPopup({
+      isOpen: true,
+      type: 'warning',
+      title: 'Remove Trust User?',
+      message: `Are you sure you want to remove the trust account "${u.trustName || u.name}"?`,
+      showCancel: true,
+      confirmText: 'Yes, Remove',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setPopup(p => ({ ...p, isOpen: false }));
+        try {
+          const res = await fetch(`/api/users/${u._id}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            fetchUsers();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+  };
+
+  const filteredUsers = users.filter(u => {
+    const q = search.toLowerCase();
+    const nameMatch = (u.trustName && u.trustName.toLowerCase().includes(q)) ||
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.contactPerson && u.contactPerson.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.mobile && u.mobile.includes(q)) ||
+      (u.registrationNo && u.registrationNo.toLowerCase().includes(q));
+
+    const planMatch = planFilter === 'All' || (u.plan && u.plan.toLowerCase() === planFilter.toLowerCase());
+    const statusMatch = statusFilter === 'All' || (u.status && u.status.toLowerCase() === statusFilter.toLowerCase());
+    return nameMatch && planMatch && statusMatch;
+  });
+
+  const totalUsersCount = users.length;
+  const activeUsersCount = users.filter(u => u.status === 'Active').length;
+  const trialUsersCount = users.filter(u => u.status === 'Trial').length;
+  const totalReceiptsIssued = users.reduce((acc, u) => acc + (Number(u.receiptsCount) || 0), 0);
+
+  return (
+    <div className="dashboard-container-modern">
+      <Breadcrumb items={[{ label: 'Super Admin', link: '/superadmin' }, { label: 'Users Management' }]} />
+
+      {/* Hero Banner */}
+      <div className="mint-hero-banner" style={{ marginBottom: '24px' }}>
+        <div className="mint-hero-left">
+          <div className="mint-hero-badge">
+            <Users size={14} />
+            <span>ORGANIZATIONS & TRUSTS DIRECTORY</span>
+          </div>
+          <h1 className="mint-hero-title">Users Management</h1>
+          <p className="mint-hero-subtitle">
+            Manage all registered Trust Admins and NGO organizations. Oversee plan assignments, status, registration credentials, and platform receipts.
+          </p>
+        </div>
+        <div className="mint-hero-right">
+          <button
+            type="button"
+            className="btn-trust-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '15px' }}
+            onClick={() => navigate('/superadmin/new-user')}
+          >
+            <Plus size={18} strokeWidth={2.5} />
+            <span>Add New User</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Metrics Row */}
+      <div className="dashboard-stat-grid-modern" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '24px' }}>
+        <div className="stat-modern-card card-green">
+          <div className="stat-modern-top">
+            <div className="stat-modern-icon"><Building size={22} /></div>
+            <span className="stat-modern-val">{totalUsersCount}</span>
+          </div>
+          <div className="stat-modern-bottom">
+            <span className="stat-modern-title">Total Trusts</span>
+          </div>
+        </div>
+
+        <div className="stat-modern-card card-blue">
+          <div className="stat-modern-top">
+            <div className="stat-modern-icon"><UserCheck size={22} /></div>
+            <span className="stat-modern-val">{activeUsersCount}</span>
+          </div>
+          <div className="stat-modern-bottom">
+            <span className="stat-modern-title">Active Trusts</span>
+          </div>
+        </div>
+
+        <div className="stat-modern-card card-amber">
+          <div className="stat-modern-top">
+            <div className="stat-modern-icon"><Shield size={22} /></div>
+            <span className="stat-modern-val">{trialUsersCount}</span>
+          </div>
+          <div className="stat-modern-bottom">
+            <span className="stat-modern-title">48-Hr Free Trials</span>
+          </div>
+        </div>
+
+        <div className="stat-modern-card card-purple">
+          <div className="stat-modern-top">
+            <div className="stat-modern-icon"><FileText size={22} /></div>
+            <span className="stat-modern-val">{totalReceiptsIssued}</span>
+          </div>
+          <div className="stat-modern-bottom">
+            <span className="stat-modern-title">Receipts Issued</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="trust-card" style={{ padding: '16px 20px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '320px', flexWrap: 'wrap' }}>
+          <div className="trust-search-wrapper" style={{ flex: 1, minWidth: '240px' }}>
+            <Search size={16} className="trust-search-icon" />
+            <input
+              type="text"
+              placeholder="Search by Trust, Person, Email, Mobile or Reg No..."
+              className="trust-input trust-search-input"
+              style={{ width: '100%' }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <select
+            className="trust-select"
+            style={{ width: '160px', height: '40px' }}
+            value={planFilter}
+            onChange={(e) => setPlanFilter(e.target.value)}
+          >
+            <option value="All">All Plans</option>
+            <option value="Standard">Standard</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Enterprise">Enterprise</option>
+            <option value="Starter">Starter</option>
+          </select>
+          <select
+            className="trust-select"
+            style={{ width: '150px', height: '40px' }}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="All">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Trial">Trial</option>
+            <option value="Suspended">Suspended</option>
+          </select>
+        </div>
+
+        <button
+          type="button"
+          className="btn-trust-secondary"
+          style={{ padding: '8px 12px' }}
+          onClick={fetchUsers}
+          title="Refresh Users"
+        >
+          <RefreshCw size={15} />
+        </button>
+      </div>
+
+      {/* Users Data Table */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '60px 0', color: '#64748b' }}>
+          <RefreshCw size={28} className="animate-spin" style={{ margin: '0 auto 12px auto', display: 'block' }} />
+          <p>Loading registered trusts and users...</p>
+        </div>
+      ) : filteredUsers.length === 0 ? (
+        <div className="trust-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <Users size={48} style={{ color: '#94a3b8', margin: '0 auto 16px auto' }} />
+          <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '8px' }}>No Users Found</h3>
+          <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
+            No trust accounts match the filters provided.
+          </p>
+          <button type="button" className="btn-trust-primary" onClick={handleOpenCreateModal}>
+            Add New User
+          </button>
+        </div>
+      ) : (
+        <div className="trust-table-wrapper trust-card">
+          <table className="trust-data-table">
+            <thead>
+              <tr>
+                <th>Trust / Organization</th>
+                <th>Contact Person</th>
+                <th>Email &amp; Mobile</th>
+                <th>Assigned Plan</th>
+                <th>Reg / PAN No</th>
+                <th style={{ textAlign: 'center' }}>Receipts</th>
+                <th style={{ textAlign: 'center' }}>Staff / Members</th>
+                <th>Joined Date</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'center' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map(u => (
+                <tr key={u._id}>
+                  <td>
+                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{u.trustName || u.name}</div>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>ID: {u._id}</span>
+                  </td>
+                  <td style={{ color: '#334155' }}>{u.contactPerson || u.name || 'Admin'}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#0f172a' }}>
+                      <Mail size={13} style={{ color: '#64748b' }} />
+                      <span>{u.email}</span>
+                    </div>
+                    {u.mobile && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                        <Phone size={12} style={{ color: '#94a3b8' }} />
+                        <span>{u.mobile}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <span className="badge-pill badge-info" style={{ fontWeight: 600 }}>
+                      {u.plan || 'Standard'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ fontSize: '12px', color: '#334155' }}>
+                      <strong>Reg:</strong> {u.registrationNo || 'N/A'}
+                    </div>
+                    {u.panNo && (
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>
+                        <strong>PAN:</strong> {u.panNo}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ fontWeight: 600, color: '#0f172a', textAlign: 'center' }}>{u.receiptsCount || 0}</td>
+                  <td style={{ fontWeight: 600, color: '#10b981', textAlign: 'center' }}>{u.staffCount || 0}</td>
+                  <td style={{ fontSize: '13px', color: '#64748b' }}>{u.joinedDate || '10/01/2026'}</td>
+                  <td>
+                    <span className={`badge-pill ${u.status === 'Active' ? 'badge-success' : (u.status === 'Trial' ? 'badge-warning' : 'badge-danger')}`}>
+                      {u.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className="btn-table-action"
+                        onClick={() => navigate(`/superadmin/users/${u._id}`)}
+                        title="View Trust Details & Statistics"
+                      >
+                        <Eye size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-table-action"
+                        onClick={() => navigate(`/superadmin/new-user?id=${u._id}`)}
+                        title="Edit User Details"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-table-action"
+                        onClick={() => handleToggleStatus(u)}
+                        title={u.status === 'Active' ? 'Suspend Trust' : 'Activate Trust'}
+                      >
+                        {u.status === 'Active' ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-table-action delete"
+                        onClick={() => handleDeleteUser(u)}
+                        title="Delete User"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Popup */}
+      <SimplePopup
+        isOpen={popup.isOpen}
+        type={popup.type}
+        title={popup.title}
+        message={popup.message}
+        showCancel={popup.showCancel}
+        confirmText={popup.confirmText}
+        cancelText={popup.cancelText}
+        onConfirm={popup.onConfirm}
+        onCancel={() => setPopup(p => ({ ...p, isOpen: false }))}
+      />
+    </div>
+  );
+}
