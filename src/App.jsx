@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet, useNavigate, Link } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import TopHeader from './components/TopHeader';
 import Footer from './components/Footer';
+import Logo from './components/Logo';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -211,6 +212,10 @@ function AppContent() {
     location.pathname.toLowerCase().includes('signup') ||
     location.pathname.toLowerCase().includes('registration');
   const isPrintPage = location.pathname.includes('print-receipt') || location.pathname.includes('print_receipt');
+  const isPolicyPage =
+    location.pathname.toLowerCase().includes('terms-and-conditions') ||
+    location.pathname.toLowerCase().includes('cancellation-refund-policy') ||
+    location.pathname.toLowerCase().includes('privacy-policy');
   const isPlainLayout = !user || isAuthPage || isPrintPage;
 
   return (
@@ -233,7 +238,51 @@ function AppContent() {
           />
         )}
 
-        <div className={isPlainLayout ? "app-plain-content" : "app-page-container"}>
+        {/* Public Top Header for Policy pages when accessed without login */}
+        {!user && isPolicyPage && (
+          <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #eef2f5', padding: '14px 20px', width: '100%', position: 'sticky', top: 0, zIndex: 100 }}>
+            <div style={{ maxWidth: '1140px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Logo />
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Link
+                  to="/trust/login"
+                  style={{
+                    padding: '7px 18px',
+                    borderRadius: '4px',
+                    border: '1px solid #ced4da',
+                    fontSize: '13.5px',
+                    fontWeight: '600',
+                    color: '#334155',
+                    textDecoration: 'none',
+                    backgroundColor: '#ffffff'
+                  }}
+                >
+                  Admin Login
+                </Link>
+                <Link
+                  to="/trust/register"
+                  style={{
+                    padding: '7px 18px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    fontSize: '13.5px',
+                    fontWeight: '600',
+                    color: '#ffffff',
+                    textDecoration: 'none',
+                    backgroundColor: '#00a651'
+                  }}
+                >
+                  Register
+                </Link>
+              </div>
+            </div>
+          </header>
+        )}
+
+        <div
+          className={isPlainLayout ? "app-plain-content" : "app-page-container"}
+          style={!user && isPolicyPage ? { maxWidth: '1140px', margin: '24px auto', padding: '0 20px' } : undefined}
+        >
           <Routes>
             {/* Public Super Admin Auth Routes */}
             <Route
@@ -334,13 +383,27 @@ function AppContent() {
               element={<Navigate to="/register" replace />}
             />
 
-            {/* Public Legal & Policy Pages (accessible without login) */}
+            {/* Public Legal & Policy Pages (accessible without login or with login) */}
             <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
             <Route path="/terms-and-conditions.php" element={<Navigate to="/terms-and-conditions" replace />} />
             <Route path="/cancellation-refund-policy" element={<CancellationRefundPolicyPage />} />
             <Route path="/cancellation-refund-policy.php" element={<Navigate to="/cancellation-refund-policy" replace />} />
             <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
             <Route path="/privacy-policy.php" element={<Navigate to="/privacy-policy" replace />} />
+
+            <Route path="/trust/terms-and-conditions" element={<TermsAndConditionsPage />} />
+            <Route path="/trust/terms-and-conditions.php" element={<Navigate to="/trust/terms-and-conditions" replace />} />
+            <Route path="/trust/cancellation-refund-policy" element={<CancellationRefundPolicyPage />} />
+            <Route path="/trust/cancellation-refund-policy.php" element={<Navigate to="/trust/cancellation-refund-policy" replace />} />
+            <Route path="/trust/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/trust/privacy-policy.php" element={<Navigate to="/trust/privacy-policy" replace />} />
+
+            <Route path="/superadmin/terms-and-conditions" element={<TermsAndConditionsPage />} />
+            <Route path="/superadmin/terms-and-conditions.php" element={<Navigate to="/superadmin/terms-and-conditions" replace />} />
+            <Route path="/superadmin/cancellation-refund-policy" element={<CancellationRefundPolicyPage />} />
+            <Route path="/superadmin/cancellation-refund-policy.php" element={<Navigate to="/superadmin/cancellation-refund-policy" replace />} />
+            <Route path="/superadmin/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/superadmin/privacy-policy.php" element={<Navigate to="/superadmin/privacy-policy" replace />} />
 
             {/* Public Receipt View (for donors receiving receipt links) */}
             <Route path="/trust/print-receipt" element={<PrintReceiptPage user={user} />} />
@@ -437,13 +500,7 @@ function AppContent() {
               <Route path="/superadmin/payment-report" element={<PaymentModeReportPage user={user} />} />
               <Route path="/superadmin/payment-reports" element={<PaymentModeReportPage user={user} />} />
 
-              {/* Super Admin Legal & Policy Pages (Within SuperAdmin Layout) */}
-              <Route path="/superadmin/terms-and-conditions" element={<TermsAndConditionsPage />} />
-              <Route path="/superadmin/terms-and-conditions.php" element={<Navigate to="/superadmin/terms-and-conditions" replace />} />
-              <Route path="/superadmin/cancellation-refund-policy" element={<CancellationRefundPolicyPage />} />
-              <Route path="/superadmin/cancellation-refund-policy.php" element={<Navigate to="/superadmin/cancellation-refund-policy" replace />} />
-              <Route path="/superadmin/privacy-policy" element={<PrivacyPolicyPage />} />
-              <Route path="/superadmin/privacy-policy.php" element={<Navigate to="/superadmin/privacy-policy" replace />} />
+
 
               {/* Super Admin Short Aliases */}
               <Route path="/plans" element={<PlansManagementPage />} />
@@ -666,12 +723,7 @@ function AppContent() {
               <Route path="/trust/support.php" element={<Navigate to="/trust/support" replace />} />
               <Route path="/superadmin/support" element={<SupportPage user={user} />} />
               <Route path="/superadmin/support.php" element={<Navigate to="/superadmin/support" replace />} />
-              <Route path="/trust/terms-and-conditions" element={<TermsAndConditionsPage />} />
-              <Route path="/trust/terms-and-conditions.php" element={<Navigate to="/trust/terms-and-conditions" replace />} />
-              <Route path="/trust/cancellation-refund-policy" element={<CancellationRefundPolicyPage />} />
-              <Route path="/trust/cancellation-refund-policy.php" element={<Navigate to="/trust/cancellation-refund-policy" replace />} />
-              <Route path="/trust/privacy-policy" element={<PrivacyPolicyPage />} />
-              <Route path="/trust/privacy-policy.php" element={<Navigate to="/trust/privacy-policy" replace />} />
+
             </Route>
 
             {/* Root and Fallback: Redirect based on user role */}
@@ -698,7 +750,7 @@ function AppContent() {
           </Routes>
         </div>
 
-        {!isPlainLayout && <Footer />}
+        {(!isPlainLayout || (!user && isPolicyPage)) && <Footer />}
       </div>
 
       {/* Floating WhatsApp Button on every page (except standalone print receipts) */}

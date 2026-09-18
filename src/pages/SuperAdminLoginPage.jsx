@@ -303,15 +303,15 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
       <footer style={{ backgroundColor: '#ffffff', borderTop: '1px solid #eef2f5', padding: '20px 0' }}>
         <div style={{ maxWidth: '1140px', margin: '0 auto', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', fontSize: '13px', color: '#6c757d' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Link to="/terms-and-conditions" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Terms &amp; Conditions
             </Link>
             <span>|</span>
-            <Link to="/cancellation-refund-policy" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/cancellation-refund-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Cancellation &amp; Refunds Policy
             </Link>
             <span>|</span>
-            <Link to="/privacy-policy" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Privacy Policy
             </Link>
           </div>

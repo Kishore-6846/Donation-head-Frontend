@@ -265,28 +265,9 @@ export default function RegisterPage({ onLoginSuccess }) {
               <h2 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px 0', letterSpacing: '-0.3px' }}>
                 Create Your Account
               </h2>
-              <p style={{ fontSize: '15px', fontWeight: '600', margin: '0 0 10px 0', opacity: 0.95 }}>
-                Start Your FREE 48-Hours Trial
+              <p style={{ fontSize: '15px', fontWeight: '600', margin: 0, opacity: 0.95 }}>
+                Admin Portal
               </p>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.18)',
-                  padding: '6px 16px',
-                  borderRadius: '30px',
-                  fontSize: '12.5px',
-                  fontWeight: '600',
-                  flexWrap: 'wrap',
-                  justifyContent: 'center',
-                  marginTop: '4px'
-                }}
-              >
-                <span>✓ No Payment Required During Registration</span>
-                <span style={{ opacity: 0.7 }}>|</span>
-                <span>✓ Annual Subscription: ₹1200 + GST Only</span>
-              </div>
             </div>
 
             {/* Card Content Form */}
@@ -712,7 +693,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                   </label>
                 </div>
 
-                {/* Submit Button: Start Free Trail */}
+                {/* Submit Button: Register */}
                 <button
                   type="submit"
                   disabled={loading}
@@ -732,7 +713,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                     letterSpacing: '-0.2px'
                   }}
                 >
-                  {loading ? 'Submitting Registration...' : 'Start Free Trial'}
+                  {loading ? 'Submitting Registration...' : 'Register'}
                 </button>
               </form>
 
@@ -816,15 +797,15 @@ export default function RegisterPage({ onLoginSuccess }) {
           }}
         >
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Link to="/trust/terms-and-conditions" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/trust/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Terms &amp; Conditions
             </Link>
             <span>|</span>
-            <Link to="/trust/cancellation-refund-policy" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/trust/cancellation-refund-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Cancellation &amp; Refunds Policy
             </Link>
             <span>|</span>
-            <Link to="/trust/privacy-policy" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/trust/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Privacy Policy
             </Link>
           </div>

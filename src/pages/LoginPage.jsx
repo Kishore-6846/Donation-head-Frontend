@@ -118,7 +118,7 @@ export default function LoginPage({ onLoginSuccess }) {
             {/* Green Header */}
             <div style={{ backgroundColor: '#00a651', color: '#ffffff', textAlign: 'center', padding: '26px 20px' }}>
               <h2 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px 0', letterSpacing: '-0.3px' }}>
-                Welcome Back
+                Admin Console
               </h2>
               <p style={{ fontSize: '13.5px', margin: 0, opacity: 0.95 }}>
                 Login to continue managing your Donation Receipts
@@ -295,15 +295,15 @@ export default function LoginPage({ onLoginSuccess }) {
       <footer style={{ backgroundColor: '#ffffff', borderTop: '1px solid #eef2f5', padding: '20px 0' }}>
         <div style={{ maxWidth: '1140px', margin: '0 auto', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', fontSize: '13px', color: '#6c757d' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Link to="/trust/terms-and-conditions" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/trust/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Terms &amp; Conditions
             </Link>
             <span>|</span>
-            <Link to="/trust/cancellation-refund-policy" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/trust/cancellation-refund-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Cancellation &amp; Refunds Policy
             </Link>
             <span>|</span>
-            <Link to="/trust/privacy-policy" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/trust/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Privacy Policy
             </Link>
           </div>

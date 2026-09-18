@@ -655,15 +655,15 @@ export default function SuperAdminRegisterPage({ onLoginSuccess }) {
           }}
         >
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Link to="/terms-and-conditions" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Terms &amp; Conditions
             </Link>
             <span>|</span>
-            <Link to="/cancellation-refund-policy" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/cancellation-refund-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Cancellation &amp; Refunds Policy
             </Link>
             <span>|</span>
-            <Link to="/privacy-policy" style={{ color: '#475569', textDecoration: 'none' }}>
+            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>
               Privacy Policy
             </Link>
           </div>
