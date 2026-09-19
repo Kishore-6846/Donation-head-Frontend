@@ -3,22 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
 import { Users, Trash2, Pencil, Sparkles, Plus, Mail, Phone, Shield, CheckCircle2, X } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 export default function StaffPage({ user: propUser }) {
   const navigate = useNavigate();
 
   // Get active logged-in user
   const activeUser = useMemo(() => {
-    if (propUser) return propUser;
-    try {
-      const saved = localStorage.getItem('user_info');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return null;
+    if (propUser && !isSuperUser(propUser)) return propUser;
+    const trustSession = getTrustSession();
+    return trustSession?.user || null;
   }, [propUser]);
 
   const trustEmail = activeUser?.email || '';
-  const trustName = activeUser?.trustName || activeUser?.name || '';
+  const trustName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || (!isSuperUser(activeUser) ? activeUser?.name : '') || '';
   const trustId = activeUser?._id || activeUser?.id || '';
 
   const [staff, setStaff] = useState([]);
@@ -63,13 +61,15 @@ export default function StaffPage({ user: propUser }) {
     setLoading(true);
     try {
       const queryParam = trustEmail ? `?trustEmail=${encodeURIComponent(trustEmail)}` : '';
-      const [staffRes, rolesRes] = await Promise.allSettled([
+      const targetUserId = trustEmail || trustId;
+      const [staffRes, rolesRes, userRes] = await Promise.allSettled([
         fetch(`/api/staff${queryParam}`),
-        fetch('/api/roles')
+        fetch('/api/roles'),
+        targetUserId ? fetch(`/api/users/${encodeURIComponent(targetUserId)}`) : Promise.resolve(null)
       ]);
 
       let staffData = [];
-      if (staffRes.status === 'fulfilled') {
+      if (staffRes.status === 'fulfilled' && staffRes.value) {
         const d = await staffRes.value.json();
         if (d.success && Array.isArray(d.data)) {
           staffData = d.data;
@@ -77,7 +77,7 @@ export default function StaffPage({ user: propUser }) {
         }
       }
 
-      if (rolesRes.status === 'fulfilled') {
+      if (rolesRes.status === 'fulfilled' && rolesRes.value) {
         const rData = await rolesRes.value.json();
         if (rData.success && Array.isArray(rData.data)) {
           const customRoles = rData.data.map(r => r.roleName).filter(Boolean);
@@ -86,13 +86,36 @@ export default function StaffPage({ user: propUser }) {
         }
       }
 
-      const allowed = activeUser?.plan?.toLowerCase() === 'enterprise' ? 25 : (activeUser?.plan?.toLowerCase() === 'advanced' ? 10 : 5);
+      let currentPlan = activeUser?.plan || 'Standard';
+      let extraUsers = Number(activeUser?.extraStaffUsers || activeUser?.purchasedStaffUsers || 0);
+
+      if (userRes.status === 'fulfilled' && userRes.value) {
+        try {
+          const uData = await userRes.value.json();
+          const liveUser = uData?.data || uData?.user || (uData?.email ? uData : null);
+          if (liveUser) {
+            if (liveUser.plan) currentPlan = liveUser.plan;
+            extraUsers = Number(liveUser.extraStaffUsers || liveUser.purchasedStaffUsers || 0);
+          }
+        } catch (e) {}
+      }
+
+      const planLower = (currentPlan || '').toLowerCase();
+      let baseAllowed = 4; // Standard plan default is 4
+      if (planLower.includes('enterprise')) baseAllowed = 999;
+      else if (planLower.includes('advanced')) baseAllowed = 9;
+      else if (planLower.includes('starter')) baseAllowed = 1;
+      else baseAllowed = 4; // Standard plan is 4
+
+      const totalAllowed = baseAllowed === 999 ? 999 : (baseAllowed + extraUsers);
+      const availableCount = baseAllowed === 999 ? 'Unlimited' : Math.max(0, totalAllowed - staffData.length);
+
       setPlanStats({
-        planName: activeUser?.plan || 'Standard',
+        planName: currentPlan,
         ownerLogin: 1,
-        staffAllowed: allowed,
+        staffAllowed: totalAllowed === 999 ? 'Unlimited' : totalAllowed,
         createdStaff: staffData.length,
-        available: Math.max(0, allowed - staffData.length)
+        available: availableCount
       });
     } catch (e) {
       console.error('Error fetching staff:', e);
@@ -106,6 +129,25 @@ export default function StaffPage({ user: propUser }) {
   }, [trustEmail]);
 
   const handleOpenAddModal = () => {
+    // Check if staff member limit reached for current plan
+    if (planStats.staffAllowed !== 'Unlimited' && planStats.staffAllowed !== 999 && staff.length >= planStats.staffAllowed) {
+      setPopup({
+        isOpen: true,
+        type: 'warning',
+        title: 'Staff Member Limit Reached',
+        message: `You have reached the maximum allowed limit of ${planStats.staffAllowed} staff member(s) for your ${planStats.planName} plan. To add more staff members, please purchase additional users via "Buy Users" or upgrade your plan.`,
+        confirmText: '₹ Buy Users',
+        cancelText: 'Close',
+        showCancel: true,
+        onConfirm: () => {
+          setPopup(p => ({ ...p, isOpen: false }));
+          navigate('/trust/buy-staff-users');
+        },
+        onCancel: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
     setEditingStaff(null);
     setStaffFormData({
       name: '',
@@ -139,6 +181,25 @@ export default function StaffPage({ user: propUser }) {
         message: 'Name and email are mandatory.',
         confirmText: 'OK',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    // Limit check for new staff addition
+    if (!editingStaff && planStats.staffAllowed !== 'Unlimited' && planStats.staffAllowed !== 999 && staff.length >= planStats.staffAllowed) {
+      setPopup({
+        isOpen: true,
+        type: 'warning',
+        title: 'Staff Member Limit Reached',
+        message: `You have reached your maximum limit of ${planStats.staffAllowed} staff member(s) for your ${planStats.planName} plan. Please purchase additional users to add more staff.`,
+        confirmText: '₹ Buy Users',
+        cancelText: 'Close',
+        showCancel: true,
+        onConfirm: () => {
+          setPopup(p => ({ ...p, isOpen: false }));
+          navigate('/trust/buy-staff-users');
+        },
+        onCancel: () => setPopup(p => ({ ...p, isOpen: false }))
       });
       return;
     }
@@ -265,8 +326,18 @@ export default function StaffPage({ user: propUser }) {
         <div className="mint-hero-right" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             type="button"
+            className="mint-btn-add mint-btn-primary"
+            onClick={handleOpenAddModal}
+            title="Add New Staff Member"
+          >
+            <Plus size={16} />
+            <span>Add Member</span>
+          </button>
+          <button
+            type="button"
             className="mint-btn-add"
             onClick={() => navigate('/trust/buy-staff-users')}
+            title="Buy Additional Staff Users"
           >
             <Users size={16} />
             <span>₹ Buy Users</span>

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import navLogo from '../assets/Receipt-Nav-Logo.png';
 import SimplePopup from '../components/SimplePopup';
 import { Eye, EyeOff, Lock, AlertCircle, Shield, ArrowRight } from 'lucide-react';
+import { setTrustSession, setSuperAdminSession, isSuperUser } from '../utils/authStorage';
 
 export default function LoginPage({ onLoginSuccess }) {
   const navigate = useNavigate();
@@ -27,15 +28,16 @@ export default function LoginPage({ onLoginSuccess }) {
       const data = await res.json();
 
       if (data.success) {
-        localStorage.removeItem('profile_data');
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user_info', JSON.stringify(data.user));
-        if (data.user?.email) {
-          localStorage.setItem(`profile_data_${data.user.email.toLowerCase()}`, JSON.stringify(data.user));
+        const isSuper = isSuperUser(data.user) || username.toLowerCase().includes('superadmin');
+        if (isSuper) {
+          setSuperAdminSession(data.user, data.token);
+          if (onLoginSuccess) onLoginSuccess(data.user);
+          navigate('/superadmin');
+        } else {
+          setTrustSession(data.user, data.token);
+          if (onLoginSuccess) onLoginSuccess(data.user);
+          navigate('/trust/');
         }
-        if (onLoginSuccess) onLoginSuccess(data.user);
-        const isSuper = data.user?.role?.toLowerCase() === 'superadmin' || username.toLowerCase().includes('superadmin');
-        navigate(isSuper ? '/superadmin' : '/trust/');
       } else {
         setError(data.message || 'Login failed. Please verify credentials.');
       }

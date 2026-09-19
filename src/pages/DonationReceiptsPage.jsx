@@ -14,6 +14,7 @@ import {
   Send,
   Sparkles
 } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 export default function DonationReceiptsPage({ user }) {
   const navigate = useNavigate();
@@ -38,10 +39,15 @@ export default function DonationReceiptsPage({ user }) {
 
 
   const location = useLocation();
-  const localUser = (() => { try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch(e) { return {}; } })();
-  const effectiveEmail = (user?.email || localUser?.email || '').trim();
-  const effectiveTrustName = (user?.trustName || localUser?.trustName || (user?.name && !user.name.toLowerCase().includes('super') ? user.name : (localUser?.name && !localUser.name.toLowerCase().includes('super') ? localUser.name : '')) || '').trim();
   const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin');
+  const trustSession = getTrustSession();
+  const activeUser = (!isSuperUser(user) && user) || (!isSuperAdmin ? trustSession?.user : null) || {};
+  const effectiveEmail = (activeUser?.email || '').trim();
+  const effectiveTrustName = (
+    (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') ||
+    (activeUser?.name && !isSuperUser(activeUser) ? activeUser.name : '') ||
+    ''
+  ).trim();
 
   const fetchReceipts = async () => {
     setLoading(true);

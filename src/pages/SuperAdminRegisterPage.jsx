@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import navLogo from '../assets/Receipt-Nav-Logo.png';
 import { Lock, Shield, CheckCircle2, AlertCircle, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { setSuperAdminSession } from '../utils/authStorage';
 
 const INDIAN_STATES = [
   'Andaman Nicobar',
@@ -130,8 +131,7 @@ export default function SuperAdminRegisterPage({ onLoginSuccess }) {
 
       if (data.success) {
         setSuccessMsg(data.message || 'Super Admin account created successfully!');
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user_info', JSON.stringify(superAdminUser));
+        setSuperAdminSession(superAdminUser, data.token);
 
         if (onLoginSuccess) {
           onLoginSuccess(superAdminUser);

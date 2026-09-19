@@ -24,11 +24,11 @@ const STANDARD_PLATFORM_REPORTS = [
   {
     _id: 'std_receipts_master',
     isStandard: true,
-    title: 'Donation Receipts Master Report',
+    title: 'Receipt Reports',
     code: 'REP-RCPT-MASTER',
     category: 'Financial Audit',
     reportBase: 'receipts',
-    reportBaseLabel: 'Donation Receipts Register',
+    reportBaseLabel: 'Receipt Reports',
     fromDate: '2026-04-01',
     toDate: '2026-09-30',
     targetTrust: 'All Trusts',
@@ -54,11 +54,11 @@ const STANDARD_PLATFORM_REPORTS = [
   {
     _id: 'std_10bd_statutory',
     isStandard: true,
-    title: 'Form 10BD Statutory Tax Report',
+    title: 'Form No. 10BD',
     code: 'REP-10BD-STATUTORY',
     category: 'Statutory Compliance',
     reportBase: '10bd',
-    reportBaseLabel: 'Form 10BD Statutory Tax',
+    reportBaseLabel: 'Form No. 10BD',
     fromDate: '2026-04-01',
     toDate: '2026-09-30',
     targetTrust: 'All Trusts',
@@ -84,11 +84,11 @@ const STANDARD_PLATFORM_REPORTS = [
   {
     _id: 'std_head_collection',
     isStandard: true,
-    title: 'Donation Head Wise Collection Report',
+    title: 'Head-Wise Reports',
     code: 'REP-HEAD-COLLECTION',
     category: 'Temple Endowment',
     reportBase: 'donation-head',
-    reportBaseLabel: 'Donation Head Wise',
+    reportBaseLabel: 'Head-Wise Reports',
     fromDate: '2026-04-01',
     toDate: '2026-09-30',
     targetTrust: 'All Trusts',
@@ -112,11 +112,11 @@ const STANDARD_PLATFORM_REPORTS = [
   {
     _id: 'std_donor_directory',
     isStandard: true,
-    title: 'Donor Directory & Stewardship Report',
+    title: 'Donor Reports',
     code: 'REP-DONOR-DIRECTORY',
     category: 'Donor Analytics',
     reportBase: 'donor',
-    reportBaseLabel: 'Donor Directory',
+    reportBaseLabel: 'Donor Reports',
     fromDate: '2026-04-01',
     toDate: '2026-09-30',
     targetTrust: 'All Trusts',
@@ -140,11 +140,11 @@ const STANDARD_PLATFORM_REPORTS = [
   {
     _id: 'std_donation_type',
     isStandard: true,
-    title: 'Donation Type Classification Matrix',
+    title: 'Donation Type Report',
     code: 'REP-TYPE-MATRIX',
     category: 'Financial Audit',
     reportBase: 'donation-type',
-    reportBaseLabel: 'Donation Type Matrix',
+    reportBaseLabel: 'Donation Type Report',
     fromDate: '2026-04-01',
     toDate: '2026-09-30',
     targetTrust: 'All Trusts',
@@ -168,11 +168,11 @@ const STANDARD_PLATFORM_REPORTS = [
   {
     _id: 'std_payment_mode',
     isStandard: true,
-    title: 'Payment Mode Reconciliation Report',
+    title: 'Payment Mode Report',
     code: 'REP-PAYMENT-RECON',
     category: 'Financial Audit',
     reportBase: 'payment-mode',
-    reportBaseLabel: 'Payment Mode Summary',
+    reportBaseLabel: 'Payment Mode Report',
     fromDate: '2026-04-01',
     toDate: '2026-09-30',
     targetTrust: 'All Trusts',
@@ -224,12 +224,12 @@ const STANDARD_PLATFORM_REPORTS = [
 // Helper functions for Report Model and Configured Columns metadata
 const getReportModel = (item) => {
   if (item.reportBaseLabel) return item.reportBaseLabel;
-  if (item.reportBase === 'receipts') return 'Donation Receipts Register';
-  if (item.reportBase === '10bd') return 'Form 10BD Statutory Tax';
-  if (item.reportBase === 'donation-head') return 'Donation Head Wise';
-  if (item.reportBase === 'donor') return 'Donor Directory';
-  if (item.reportBase === 'donation-type') return 'Donation Type Matrix';
-  if (item.reportBase === 'payment-mode') return 'Payment Mode Summary';
+  if (item.reportBase === 'receipts') return 'Receipt Reports';
+  if (item.reportBase === '10bd') return 'Form No. 10BD';
+  if (item.reportBase === 'donation-head') return 'Head-Wise Reports';
+  if (item.reportBase === 'donor') return 'Donor Reports';
+  if (item.reportBase === 'donation-type') return 'Donation Type Report';
+  if (item.reportBase === 'payment-mode') return 'Payment Mode Report';
   if (item.reportBase === 'custom') return 'Platform Executive Intelligence';
   return item.category || 'Standard Ledger';
 };
@@ -315,15 +315,10 @@ export default function PublishedReportsPage() {
         };
       });
 
-      // In Super Admin, include all standard reports; in Trust Admin, exclude standard platform reports
+      // Include all platform reports and dynamic published reports
       const map = new Map();
-      if (isSuperAdmin) {
-        populatedStandardReports.forEach(std => map.set(std._id, std));
-      }
+      populatedStandardReports.forEach(std => map.set(std._id, std));
       dynamicList.forEach(dyn => {
-        if (!isSuperAdmin && (dyn.isStandard || dyn._id?.startsWith('std_'))) {
-          return; // Exclude standard platform reports in Trust Admin panel
-        }
         const existing = map.get(dyn._id) || {};
         map.set(dyn._id, { ...existing, ...dyn });
       });

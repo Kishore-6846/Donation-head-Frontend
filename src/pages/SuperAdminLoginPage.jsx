@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import navLogo from '../assets/Receipt-Nav-Logo.png';
 import SimplePopup from '../components/SimplePopup';
 import { Eye, EyeOff, Lock, AlertCircle, Shield, ArrowRight } from 'lucide-react';
+import { setSuperAdminSession } from '../utils/authStorage';
 
 export default function SuperAdminLoginPage({ onLoginSuccess }) {
   const navigate = useNavigate();
@@ -32,18 +33,13 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
       const data = await res.json();
 
       if (data.success) {
-        localStorage.removeItem('profile_data');
         const superAdminUser = {
           ...data.user,
           role: 'Super Admin',
           trustName: data.user?.trustName || 'DONATION RECEIPT SUPER ADMIN',
           name: data.user?.name || 'Super Administrator'
         };
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user_info', JSON.stringify(superAdminUser));
-        if (superAdminUser.email) {
-          localStorage.setItem(`profile_data_${superAdminUser.email.toLowerCase()}`, JSON.stringify(superAdminUser));
-        }
+        setSuperAdminSession(superAdminUser, data.token);
         if (onLoginSuccess) onLoginSuccess(superAdminUser);
         navigate('/superadmin');
       } else {

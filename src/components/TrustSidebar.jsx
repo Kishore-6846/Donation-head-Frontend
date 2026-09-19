@@ -15,6 +15,7 @@ import {
   LogOut,
   X
 } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 export default function TrustSidebar({ isOpen, onClose, user, onLogout }) {
   const location = useLocation();
@@ -56,9 +57,9 @@ export default function TrustSidebar({ isOpen, onClose, user, onLogout }) {
   const [dynamicReports, setDynamicReports] = useState([]);
 
   useEffect(() => {
-    const localUser = (() => { try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch(e) { return {}; } })();
-    const currentUser = user || localUser;
-    const trustName = currentUser?.trustName || currentUser?.name || '';
+    const trustSession = getTrustSession();
+    const currentUser = (!isSuperUser(user) && user) || trustSession?.user || {};
+    const trustName = (currentUser?.trustName && currentUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? currentUser.trustName : '') || (!isSuperUser(currentUser) ? currentUser?.name : '') || '';
     let url = '/api/dynamic-reports?status=Published';
     if (trustName) {
       url += `&trust=${encodeURIComponent(trustName)}`;

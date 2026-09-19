@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { Sparkles, FileText, Filter, FileSpreadsheet, PlusCircle, Plus, RotateCcw } from 'lucide-react';
+import { Sparkles, FileText, Filter, FileSpreadsheet, RotateCcw } from 'lucide-react';
 
 export default function Form10BDReportPage({ user: propUser }) {
   const location = useLocation();
@@ -12,9 +12,33 @@ export default function Form10BDReportPage({ user: propUser }) {
   const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin') || currentUser?.role?.toLowerCase() === 'superadmin';
   const [financialYear, setFinancialYear] = useState('2026-2027');
   const [reportType, setReportType] = useState('Full Report');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [selectedTrust, setSelectedTrust] = useState('');
+  const [trustsList, setTrustsList] = useState([]);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetch('/api/users')
+        .then(res => res.json())
+        .then(data => {
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+          const names = list
+            .map(u => u.trustName || u.name)
+            .filter(Boolean);
+          const unique = Array.from(new Set(['Arulmigu Sivan Trust', ...names]));
+          setTrustsList(unique);
+        })
+        .catch(err => console.error('Error fetching trusts:', err));
+    }
+  }, [isSuperAdmin]);
+
   const [activeReportInfo, setActiveReportInfo] = useState({
     financialYear: '2026-2027',
-    reportType: 'Full Report'
+    reportType: 'Full Report',
+    fromDate: '',
+    toDate: '',
+    trust: ''
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -27,25 +51,15 @@ export default function Form10BDReportPage({ user: propUser }) {
   const [sortField, setSortField] = useState('srNo');
   const [sortDirection, setSortDirection] = useState('asc');
 
-  // Direct Entry State for adding details directly into report
-  const [showAddDirect, setShowAddDirect] = useState(false);
-  const [directForm, setDirectForm] = useState({
-    donorName: '',
-    idCode: 'PAN',
-    uniqueIdNo: '',
-    sectionCode: 'Section 80G',
-    donationType: 'General',
-    modeOfReceipt: 'Electronic modes including account payee cheque/draft',
-    amount: '',
-    address: ''
-  });
-  const [addMessage, setAddMessage] = useState('');
-
-  const fetchReportData = async (fy, rt) => {
+  const fetchReportData = async (fy, rt, fDate = fromDate, tDate = toDate, trust = selectedTrust) => {
     setLoading(true);
     try {
       let url = `/api/reports/10bd?financialYear=${encodeURIComponent(fy || financialYear)}&reportType=${encodeURIComponent(rt || reportType)}`;
-      if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
+      if (fDate) url += `&fromDate=${encodeURIComponent(fDate)}`;
+      if (tDate) url += `&toDate=${encodeURIComponent(tDate)}`;
+      if (trust) {
+        url += `&trustName=${encodeURIComponent(trust)}`;
+      } else if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
         url += `&trustEmail=${encodeURIComponent(currentUser?.email || '')}&trustName=${encodeURIComponent(currentUser?.trustName || currentUser?.name || '')}&trustId=${encodeURIComponent(currentUser?._id || '')}`;
       }
       const res = await fetch(url);
@@ -63,91 +77,21 @@ export default function Form10BDReportPage({ user: propUser }) {
   const handleReset = () => {
     setFinancialYear('2026-2027');
     setReportType('Full Report');
+    setFromDate('');
+    setToDate('');
+    setSelectedTrust('');
     setSearchTerm('');
     setCurrentPage(1);
     setIsSubmitted(false);
     setAllData([]);
   };
 
-  const handleAddDirect = async (e) => {
-    e.preventDefault();
-    if (!directForm.donorName || !directForm.amount) {
-      alert('Donor Name and Amount are required.');
-      return;
-    }
-
-    try {
-      const payload = {
-        donorName: directForm.donorName.trim(),
-        amount: parseFloat(directForm.amount) || 0,
-        panNo: directForm.idCode === 'PAN' ? directForm.uniqueIdNo.trim().toUpperCase() : '',
-        aadhaarNo: directForm.idCode === 'Aadhaar Number' ? directForm.uniqueIdNo.trim() : '',
-        address: directForm.address.trim(),
-        donationType: directForm.donationType,
-        donationHead: 'General',
-        paymentMode: directForm.modeOfReceipt.includes('Cash') ? 'Cash' : 'Online / UPI',
-        paymentDetails: directForm.modeOfReceipt,
-        reference: directForm.uniqueIdNo ? `${directForm.idCode}: ${directForm.uniqueIdNo}` : '',
-        notes: `Form 10BD Entry (${directForm.sectionCode})`,
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      const res = await fetch('/api/receipts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-      const savedReceipt = json.success ? json.data : null;
-
-      const newEntry = {
-        _id: savedReceipt?._id || ('10bd_' + Date.now()),
-        srNo: 1,
-        preAckNo: 'PRE_' + Math.floor(100000 + Math.random() * 900000),
-        idCode: directForm.idCode,
-        uniqueIdNo: directForm.uniqueIdNo || (directForm.idCode === 'PAN' ? 'PAN_NOT_GIVEN' : ''),
-        sectionCode: directForm.sectionCode,
-        urn: 'AAVCA0216A25CH02',
-        issuanceDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-        donorName: directForm.donorName,
-        address: directForm.address,
-        donationType: directForm.donationType,
-        modeOfReceipt: directForm.modeOfReceipt,
-        amount: parseFloat(directForm.amount) || 0
-      };
-
-      setAllData(prev => [newEntry, ...prev.map((item, idx) => ({ ...item, srNo: idx + 2 }))]);
-      setIsSubmitted(true);
-      setAddMessage(`Successfully added ${directForm.donorName} (₹${directForm.amount}) directly! Auto-synced to Admin Panel.`);
-      setTimeout(() => setAddMessage(''), 6000);
-      setDirectForm({
-        donorName: '',
-        idCode: 'PAN',
-        uniqueIdNo: '',
-        sectionCode: 'Section 80G',
-        donationType: 'General',
-        modeOfReceipt: 'Electronic modes including account payee cheque/draft',
-        amount: '',
-        address: ''
-      });
-
-      // Refetch live report data from server
-      fetchReportData(financialYear, reportType);
-    } catch (err) {
-      console.error('Error saving directly to receipts API:', err);
-      alert('Failed to save to server: ' + err.message);
-    }
-  };
-
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
     setIsSubmitted(true);
-    setActiveReportInfo({ financialYear, reportType });
+    setActiveReportInfo({ financialYear, reportType, fromDate, toDate, trust: selectedTrust });
     setCurrentPage(1);
-    fetchReportData(financialYear, reportType);
+    fetchReportData(financialYear, reportType, fromDate, toDate, selectedTrust);
   };
 
   // Filter and Sort Data
@@ -158,6 +102,7 @@ export default function Form10BDReportPage({ user: propUser }) {
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = allData.filter(item =>
+        (item.trustName && item.trustName.toLowerCase().includes(term)) ||
         (item.donorName && item.donorName.toLowerCase().includes(term)) ||
         (item.address && item.address.toLowerCase().includes(term)) ||
         (item.amount && item.amount.toString().includes(term)) ||
@@ -215,6 +160,7 @@ export default function Form10BDReportPage({ user: propUser }) {
 
     const headers = [
       'Sr. No.',
+      'User / Trust',
       'Pre Acknowledgement Number',
       'ID Code',
       'Unique Identification Number',
@@ -230,6 +176,7 @@ export default function Form10BDReportPage({ user: propUser }) {
 
     const rows = dataToExport.map((r, idx) => [
       r.srNo || idx + 1,
+      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
       `"${r.preAckNo || ''}"`,
       `"${r.idCode || ''}"`,
       `"${r.uniqueIdNo || ''}"`,
@@ -381,20 +328,6 @@ export default function Form10BDReportPage({ user: propUser }) {
             Generate and export official Form 10BD statements for filing with the Income Tax Department.
           </p>
         </div>
-        {isSuperAdmin && (
-          <div className="mint-hero-right">
-            <button
-              type="button"
-              className="btn-trust-primary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '15px' }}
-              onClick={() => setShowAddDirect(!showAddDirect)}
-              title="Add new donor certificate record directly to this report"
-            >
-              <PlusCircle size={18} strokeWidth={2.5} />
-              <span>{showAddDirect ? 'Close Direct Form' : '+ Add 10BD Entry Directly'}</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Main Table Card Container */}
@@ -409,11 +342,34 @@ export default function Form10BDReportPage({ user: propUser }) {
             {isSubmitted && (
               <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
                 Showing <strong>{activeReportInfo.reportType}</strong> for FY <strong>{activeReportInfo.financialYear}</strong>
+                {activeReportInfo.trust ? ` | Trust: ${activeReportInfo.trust}` : ' | All Trusts'}
+                {activeReportInfo.fromDate || activeReportInfo.toDate
+                  ? ` | Period: ${activeReportInfo.fromDate || 'Start'} to ${activeReportInfo.toDate || 'End'}`
+                  : ' | Period: All Dates'}
               </span>
             )}
           </div>
 
           <form onSubmit={handleSubmit} className="report-filter-grid">
+            {isSuperAdmin && (
+              <div className="report-field-group">
+                <label htmlFor="trustSelect" className="report-field-label">
+                  User / Trust
+                </label>
+                <select
+                  id="trustSelect"
+                  value={selectedTrust}
+                  onChange={(e) => setSelectedTrust(e.target.value)}
+                  className="report-field-select"
+                >
+                  <option value="">All Trusts / Users</option>
+                  {trustsList.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="report-field-group">
               <label htmlFor="fySelect" className="report-field-label">
                 Financial Year
@@ -448,6 +404,32 @@ export default function Form10BDReportPage({ user: propUser }) {
               </select>
             </div>
 
+            <div className="report-field-group">
+              <label htmlFor="10bdFromDate" className="report-field-label">
+                From Date (Optional)
+              </label>
+              <input
+                id="10bdFromDate"
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="report-field-input"
+              />
+            </div>
+
+            <div className="report-field-group">
+              <label htmlFor="10bdToDate" className="report-field-label">
+                To Date (Optional)
+              </label>
+              <input
+                id="10bdToDate"
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="report-field-input"
+              />
+            </div>
+
             <div className="report-filter-actions">
               <button type="submit" className="report-btn-submit" title="Generate Form 10BD statement">
                 <Filter size={15} />
@@ -477,136 +459,7 @@ export default function Form10BDReportPage({ user: propUser }) {
           </form>
         </div>
 
-        {/* Inline Direct Entry Panel */}
-        {isSuperAdmin && showAddDirect && (
-          <div className="report-direct-add-panel">
-            <div className="report-direct-add-header">
-              <div className="report-direct-add-title">
-                <PlusCircle size={18} />
-                <span>Add Form 10BD Certificate Record Directly</span>
-              </div>
-              <span style={{ fontSize: '12.5px', color: '#047857', fontWeight: 500 }}>
-                Directly adds new statutory compliance row into Form 10BD table
-              </span>
-            </div>
-
-            <form onSubmit={handleAddDirect}>
-              <div className="report-direct-add-grid">
-                <div className="report-field-group">
-                  <label className="report-field-label">Donor Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Anand R"
-                    className="report-field-input"
-                    value={directForm.donorName}
-                    onChange={e => setDirectForm({ ...directForm, donorName: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">ID Type</label>
-                  <select
-                    className="report-field-select"
-                    value={directForm.idCode}
-                    onChange={e => setDirectForm({ ...directForm, idCode: e.target.value })}
-                  >
-                    <option value="PAN">PAN Card</option>
-                    <option value="Aadhaar">Aadhaar Card</option>
-                    <option value="Passport">Passport</option>
-                    <option value="Voter ID">Voter ID</option>
-                    <option value="Taxpayer ID">Taxpayer ID</option>
-                  </select>
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">ID / PAN Number *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. ABCDE1234F"
-                    className="report-field-input"
-                    style={{ textTransform: 'uppercase' }}
-                    value={directForm.uniqueIdNo}
-                    onChange={e => setDirectForm({ ...directForm, uniqueIdNo: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Donation Type</label>
-                  <select
-                    className="report-field-select"
-                    value={directForm.donationType}
-                    onChange={e => setDirectForm({ ...directForm, donationType: e.target.value })}
-                  >
-                    <option value="Corpus">Corpus Fund</option>
-                    <option value="Specific Grant">Specific Grant / Project</option>
-                    <option value="General">General / Others</option>
-                  </select>
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Donation Amount (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="e.g. 15000"
-                    className="report-field-input"
-                    value={directForm.amount}
-                    onChange={e => setDirectForm({ ...directForm, amount: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Payment Mode</label>
-                  <select
-                    className="report-field-select"
-                    value={directForm.modeOfReceipt}
-                    onChange={e => setDirectForm({ ...directForm, modeOfReceipt: e.target.value })}
-                  >
-                    <option value="Electronic modes including account payee cheque/draft">Electronic / Online Transfer</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Cheque/Draft">Cheque / Draft</option>
-                  </select>
-                </div>
-
-                <div className="report-field-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="report-field-label">Donor Address</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Flat 3A, Temple View Apts, Chennai"
-                    className="report-field-input"
-                    value={directForm.address}
-                    onChange={e => setDirectForm({ ...directForm, address: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-filter-actions" style={{ marginTop: '6px' }}>
-                  <button type="submit" className="report-btn-submit">
-                    <Plus size={15} />
-                    <span>Add to Form 10BD</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="report-btn-secondary"
-                    onClick={() => setShowAddDirect(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {addMessage && (
-          <div style={{ padding: '12px 18px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px', border: '1px solid #86efac', marginBottom: '16px', fontSize: '13.5px', fontWeight: 600 }}>
-            ✓ {addMessage}
-          </div>
-        )}
-
-        {/* Note / Subheading (Shown after clicking Submit, matching Screenshots 2, 3, 4, 5) */}
+        {/* Note / Subheading (Shown after clicking Submit) */}
         {isSubmitted && (
           <div style={{ marginBottom: '18px' }}>
             <h2
@@ -618,6 +471,10 @@ export default function Form10BDReportPage({ user: propUser }) {
               }}
             >
               Report for F.Y- {activeReportInfo.financialYear.replace('-', ' - ')}
+              {activeReportInfo.trust ? ` (${activeReportInfo.trust})` : ''}
+              {activeReportInfo.fromDate || activeReportInfo.toDate
+                ? ` [${activeReportInfo.fromDate || 'Start'} to ${activeReportInfo.toDate || 'End'}]`
+                : ''}
             </h2>
             <p
               style={{
@@ -692,7 +549,7 @@ export default function Form10BDReportPage({ user: propUser }) {
           </div>
         </div>
 
-        {/* Main Table with Horizontal Scroll matching Screenshots */}
+        {/* Main Table with Horizontal Scroll */}
         <div
           style={{
             width: '100%',
@@ -704,11 +561,14 @@ export default function Form10BDReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1600px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: '1780px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: '60px' }} onClick={() => handleSort('srNo')}>
                   Sr. No. {renderSortIndicator('srNo')}
+                </th>
+                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                  User / Trust {renderSortIndicator('trustName')}
                 </th>
                 <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('preAckNo')}>
                   Pre Acknowledgement Number {renderSortIndicator('preAckNo')}
@@ -749,7 +609,7 @@ export default function Form10BDReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -765,7 +625,7 @@ export default function Form10BDReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -781,7 +641,7 @@ export default function Form10BDReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -798,6 +658,7 @@ export default function Form10BDReportPage({ user: propUser }) {
                 paginatedData.map((row) => (
                   <tr key={row.srNo}>
                     <td style={tdStyle}>{row.srNo}</td>
+                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
                     <td style={tdStyle}>{row.preAckNo || ''}</td>
                     <td style={tdStyle}>{row.idCode || ''}</td>
                     <td style={tdStyle}>{row.uniqueIdNo || ''}</td>

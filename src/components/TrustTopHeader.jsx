@@ -13,6 +13,7 @@ import {
   Pencil,
   KeyRound
 } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -57,15 +58,10 @@ export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
   }, []);
 
 
-  const activeUser = user || (() => {
-    try {
-      return JSON.parse(localStorage.getItem('user_info') || '{}');
-    } catch (e) {
-      return {};
-    }
-  })();
+  const trustSession = getTrustSession();
+  const activeUser = (!isSuperUser(user) && user) || trustSession?.user || {};
 
-  const userEmail = (activeUser?.email || '').toLowerCase().trim();
+  const userEmail = (!isSuperUser(activeUser) ? (activeUser?.email || '') : '').toLowerCase().trim();
   const userScopedProfile = (() => {
     if (!userEmail) return {};
     try {
@@ -76,13 +72,15 @@ export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
   })();
 
   const trustDisplayName =
-    activeUser?.trustName ||
+    (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') ||
     userScopedProfile.name ||
-    (activeUser?.name && !activeUser.name.toLowerCase().includes('super') ? activeUser.name : 'Trust Organization');
+    (activeUser?.name && !isSuperUser(activeUser) ? activeUser.name : '') ||
+    'Trust Organization';
   const roleName =
     activeUser?.contactPerson ||
     userScopedProfile.contactPerson ||
-    (activeUser?.name && !activeUser.name.toLowerCase().includes('super') ? activeUser.name : 'Administrator');
+    (activeUser?.name && !isSuperUser(activeUser) ? activeUser.name : '') ||
+    'Administrator';
   const userLogo = activeUser?.logo || userScopedProfile.logo;
 
   const handleProfileClick = () => {

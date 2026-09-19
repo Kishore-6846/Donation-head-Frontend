@@ -14,7 +14,10 @@ import {
   Layers,
   Sparkles,
   Trash2,
-  Edit2
+  Edit2,
+  Filter,
+  RotateCcw,
+  Tag
 } from 'lucide-react';
 
 export default function DynamicReportViewerPage() {
@@ -30,6 +33,17 @@ export default function DynamicReportViewerPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState('');
   const [sortDirection, setSortDirection] = useState('asc');
+
+  // Filter and Submission State
+  const [hasFiltered, setHasFiltered] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState(null);
+  const [filterValues, setFilterValues] = useState({
+    fromDate: '',
+    toDate: '',
+    donationHead: 'All Heads',
+    donationType: 'All Types',
+    paymentMode: 'All Modes'
+  });
 
   const [popup, setPopup] = useState({
     isOpen: false,
@@ -103,6 +117,16 @@ export default function DynamicReportViewerPage() {
             if (d.data.columns && d.data.columns.length > 0) {
               setSortField(d.data.columns[0].key);
             }
+            if (d.data.filters) {
+              setFilterValues(prev => ({
+                ...prev,
+                fromDate: d.data.fromDate || '',
+                toDate: d.data.toDate || '',
+                donationHead: d.data.filters.donationHead || 'All Heads',
+                donationType: d.data.filters.donationType || 'All Types',
+                paymentMode: d.data.filters.paymentMode || 'All Modes'
+              }));
+            }
           }
         })
         .catch(err => console.error('Error fetching report:', err))
@@ -110,14 +134,90 @@ export default function DynamicReportViewerPage() {
     }
   }, [id]);
 
+  const enabledFilters = useMemo(() => {
+    return report?.enabledFilters || {
+      dateRange: true,
+      donationHead: true,
+      donationType: true,
+      paymentMode: true,
+      search: true
+    };
+  }, [report]);
+
+  const uniqueHeads = useMemo(() => {
+    if (!report?.dataRows) return [];
+    const set = new Set(report.dataRows.map(r => r.donationHead || r.head).filter(Boolean));
+    return Array.from(set);
+  }, [report]);
+
+  const uniqueTypes = useMemo(() => {
+    if (!report?.dataRows) return [];
+    const set = new Set(report.dataRows.map(r => r.donationType || r.type).filter(Boolean));
+    return Array.from(set);
+  }, [report]);
+
+  const uniqueModes = useMemo(() => {
+    if (!report?.dataRows) return [];
+    const set = new Set(report.dataRows.map(r => r.paymentMode).filter(Boolean));
+    return Array.from(set);
+  }, [report]);
+
+  const handleFilterChange = (field, val) => {
+    setFilterValues(prev => ({ ...prev, [field]: val }));
+  };
+
+  const handleApplyFilters = () => {
+    setAppliedFilters({ ...filterValues });
+    setHasFiltered(true);
+    setCurrentPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setFilterValues({
+      fromDate: '',
+      toDate: '',
+      donationHead: 'All Heads',
+      donationType: 'All Types',
+      paymentMode: 'All Modes'
+    });
+    setSearchTerm('');
+    setAppliedFilters(null);
+    setHasFiltered(false);
+    setCurrentPage(1);
+  };
+
   const handlePrint = () => {
+    if (!hasFiltered) {
+      setPopup({
+        isOpen: true,
+        type: 'info',
+        title: 'Filter Report First',
+        message: 'Please click the "Filter Report" button to display and generate report records before printing.',
+        confirmText: 'OK',
+        showCancel: false,
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
     window.print();
   };
 
   const handleExportCSV = () => {
     if (!report) return;
+    if (!hasFiltered) {
+      setPopup({
+        isOpen: true,
+        type: 'info',
+        title: 'Filter Report First',
+        message: 'Please click the "Filter Report" button to display and generate report records before exporting.',
+        confirmText: 'OK',
+        showCancel: false,
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
     const cols = report.columns || [];
-    const rows = report.dataRows || [];
+    const rows = filteredAndSortedRows;
 
     const headers = cols.map(c => `"${c.label}"`);
     const csvLines = [headers.join(',')];
@@ -140,12 +240,15 @@ export default function DynamicReportViewerPage() {
     document.body.removeChild(link);
   };
 
-  // Filter and sort rows
+  // Filter and sort rows based on active enabled filters and submission
   const filteredAndSortedRows = useMemo(() => {
-    if (!report || !Array.isArray(report.dataRows)) return [];
+    if (!hasFiltered || !report || !Array.isArray(report.dataRows)) return [];
 
     let filtered = report.dataRows;
-    if (searchTerm.trim()) {
+    const activeFilters = appliedFilters || filterValues;
+
+    // Search filter
+    if (enabledFilters.search !== false && searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(row => {
         return (report.columns || []).some(col => {
@@ -153,6 +256,37 @@ export default function DynamicReportViewerPage() {
           return val !== undefined && val !== null && String(val).toLowerCase().includes(term);
         });
       });
+    }
+
+    // Date Range Filter
+    if (enabledFilters.dateRange) {
+      if (activeFilters.fromDate) {
+        filtered = filtered.filter(r => {
+          const d = r.receiptDate || r.date;
+          return d && d >= activeFilters.fromDate;
+        });
+      }
+      if (activeFilters.toDate) {
+        filtered = filtered.filter(r => {
+          const d = r.receiptDate || r.date;
+          return d && d <= activeFilters.toDate;
+        });
+      }
+    }
+
+    // Donation Head Filter
+    if (enabledFilters.donationHead && activeFilters.donationHead && activeFilters.donationHead !== 'All Heads') {
+      filtered = filtered.filter(r => (r.donationHead || r.head) === activeFilters.donationHead);
+    }
+
+    // Donation Type Filter
+    if (enabledFilters.donationType && activeFilters.donationType && activeFilters.donationType !== 'All Types') {
+      filtered = filtered.filter(r => (r.donationType || r.type) === activeFilters.donationType);
+    }
+
+    // Payment Mode Filter
+    if (enabledFilters.paymentMode && activeFilters.paymentMode && activeFilters.paymentMode !== 'All Modes') {
+      filtered = filtered.filter(r => r.paymentMode === activeFilters.paymentMode);
     }
 
     if (sortField) {
@@ -174,7 +308,7 @@ export default function DynamicReportViewerPage() {
     }
 
     return filtered;
-  }, [report, searchTerm, sortField, sortDirection]);
+  }, [hasFiltered, report, appliedFilters, filterValues, searchTerm, sortField, sortDirection, enabledFilters]);
 
   // Pagination calculations
   const totalEntries = filteredAndSortedRows.length;
@@ -191,8 +325,13 @@ export default function DynamicReportViewerPage() {
     }
   };
 
-  const totalVolume = (report?.dataRows || []).reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-  const avgContribution = report?.dataRows?.length ? (totalVolume / report.dataRows.length) : 0;
+  const totalVolume = useMemo(() => {
+    if (!hasFiltered) return 0;
+    return filteredAndSortedRows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+  }, [hasFiltered, filteredAndSortedRows]);
+
+  const totalRecordsAudited = hasFiltered ? filteredAndSortedRows.length : 0;
+  const avgContribution = totalRecordsAudited > 0 ? (totalVolume / totalRecordsAudited) : 0;
 
   if (loading) {
     return (
@@ -339,7 +478,7 @@ export default function DynamicReportViewerPage() {
         <div className="stat-modern-card card-blue">
           <div className="stat-modern-top">
             <div className="stat-modern-icon"><Layers size={22} /></div>
-            <span className="stat-modern-val">{report.dataRows?.length || 0}</span>
+            <span className="stat-modern-val">{totalRecordsAudited}</span>
           </div>
           <div className="stat-modern-bottom">
             <span className="stat-modern-title">Total Records Audited</span>
@@ -359,21 +498,217 @@ export default function DynamicReportViewerPage() {
 
       {/* Main Table Card */}
       <div className="mint-table-card-container">
+        {/* Dynamic Filters Bar */}
+        <div style={{
+          backgroundColor: '#f8fafc',
+          border: '1px solid #e2e8f0',
+          borderRadius: '10px',
+          padding: '16px 18px',
+          marginBottom: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', fontWeight: '700', color: '#0f172a' }}>
+              <Filter size={16} color="#059669" />
+              <span>Report Filter Controls</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'none',
+                border: 'none',
+                color: '#059669',
+                fontSize: '12.5px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '4px'
+              }}
+              title="Reset all filters to default"
+            >
+              <RotateCcw size={14} />
+              <span>Reset Filters</span>
+            </button>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+            alignItems: 'flex-end'
+          }}>
+            {/* Date Range: From Date */}
+            {enabledFilters.dateRange && (
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  From Date
+                </label>
+                <input
+                  type="date"
+                  className="trust-form-input"
+                  style={{ padding: '7px 10px', fontSize: '13px' }}
+                  value={filterValues.fromDate}
+                  onChange={e => handleFilterChange('fromDate', e.target.value)}
+                />
+              </div>
+            )}
+
+            {/* Date Range: To Date */}
+            {enabledFilters.dateRange && (
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  To Date
+                </label>
+                <input
+                  type="date"
+                  className="trust-form-input"
+                  style={{ padding: '7px 10px', fontSize: '13px' }}
+                  value={filterValues.toDate}
+                  onChange={e => handleFilterChange('toDate', e.target.value)}
+                />
+              </div>
+            )}
+
+            {/* Donation Head */}
+            {enabledFilters.donationHead && (
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Donation Head / Seva
+                </label>
+                <select
+                  className="trust-form-input"
+                  style={{ padding: '7px 10px', fontSize: '13px' }}
+                  value={filterValues.donationHead}
+                  onChange={e => handleFilterChange('donationHead', e.target.value)}
+                >
+                  <option value="All Heads">All Heads</option>
+                  {uniqueHeads.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                  {!uniqueHeads.includes('General Donation') && <option value="General Donation">General Donation</option>}
+                  {!uniqueHeads.includes('Annadhanam Scheme') && <option value="Annadhanam Scheme">Annadhanam Scheme</option>}
+                  {!uniqueHeads.includes('Temple Renovation / Corpus') && <option value="Temple Renovation / Corpus">Temple Renovation / Corpus</option>}
+                  {!uniqueHeads.includes('Special Archana & Puja') && <option value="Special Archana & Puja">Special Archana &amp; Puja</option>}
+                </select>
+              </div>
+            )}
+
+            {/* Donation Type */}
+            {enabledFilters.donationType && (
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Donation Type
+                </label>
+                <select
+                  className="trust-form-input"
+                  style={{ padding: '7px 10px', fontSize: '13px' }}
+                  value={filterValues.donationType}
+                  onChange={e => handleFilterChange('donationType', e.target.value)}
+                >
+                  <option value="All Types">All Types</option>
+                  {uniqueTypes.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                  {!uniqueTypes.includes('Voluntary Donation') && <option value="Voluntary Donation">Voluntary Donation</option>}
+                  {!uniqueTypes.includes('Corpus Fund') && <option value="Corpus Fund">Corpus Fund</option>}
+                  {!uniqueTypes.includes('Earmarked Fund') && <option value="Earmarked Fund">Earmarked Fund</option>}
+                </select>
+              </div>
+            )}
+
+            {/* Payment Mode */}
+            {enabledFilters.paymentMode && (
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Payment Mode
+                </label>
+                <select
+                  className="trust-form-input"
+                  style={{ padding: '7px 10px', fontSize: '13px' }}
+                  value={filterValues.paymentMode}
+                  onChange={e => handleFilterChange('paymentMode', e.target.value)}
+                >
+                  <option value="All Modes">All Modes</option>
+                  {uniqueModes.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                  {!uniqueModes.includes('Wallet/UPI') && <option value="Wallet/UPI">Wallet / UPI</option>}
+                  {!uniqueModes.includes('Cash') && <option value="Cash">Cash</option>}
+                  {!uniqueModes.includes('Cheque/Draft') && <option value="Cheque/Draft">Cheque / Demand Draft</option>}
+                  {!uniqueModes.includes('Electronic/Bank Transfer') && <option value="Electronic/Bank Transfer">Electronic / Bank Transfer</option>}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Action Row with Filter Report Submit Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={handleApplyFilters}
+              className="btn-trust-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9px 22px',
+                fontSize: '13.5px',
+                fontWeight: 600,
+                borderRadius: '6px',
+                backgroundColor: '#059669',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}
+            >
+              <Filter size={15} />
+              <span>Filter Report</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                color: '#475569',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                padding: '8px 16px',
+                borderRadius: '6px'
+              }}
+              title="Reset all filters to default"
+            >
+              <RotateCcw size={14} />
+              <span>Reset</span>
+            </button>
+          </div>
+        </div>
+
         {/* Table Top Toolbar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
-          <div className="trust-search-wrapper" style={{ minWidth: '280px', flex: '1 1 320px' }}>
-            <Search className="trust-search-icon" size={17} />
-            <input
-              type="text"
-              className="trust-form-input trust-search-input"
-              placeholder="Search across all records..."
-              value={searchTerm}
-              onChange={e => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-            />
-          </div>
+          {enabledFilters.search !== false ? (
+            <div className="trust-search-wrapper" style={{ minWidth: '280px', flex: '1 1 320px' }}>
+              <Search className="trust-search-icon" size={17} />
+              <input
+                type="text"
+                className="trust-form-input trust-search-input"
+                placeholder="Search across all records..."
+                value={searchTerm}
+                onChange={e => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+          ) : <div />}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '13px', color: '#64748b' }}>Show:</span>
@@ -419,10 +754,49 @@ export default function DynamicReportViewerPage() {
               </tr>
             </thead>
             <tbody>
-              {paginatedRows.length === 0 ? (
+              {!hasFiltered ? (
                 <tr>
-                  <td colSpan={(report.columns?.length || 0) + 1} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                    No matching records found.
+                  <td colSpan={(report.columns?.length || 0) + 1} style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
+                    <Filter size={38} color="#059669" style={{ marginBottom: '12px' }} />
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>
+                      Click "Filter Report" to View Data
+                    </h3>
+                    <p style={{ fontSize: '13.5px', maxWidth: '460px', margin: '0 auto 16px', color: '#64748b' }}>
+                      Select your desired filter options above and click the <strong>Filter Report</strong> button to display the records.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleApplyFilters}
+                      className="btn-trust-primary"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '9px 22px',
+                        fontSize: '13.5px',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        backgroundColor: '#059669',
+                        color: '#fff',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Filter size={15} />
+                      <span>Filter Report</span>
+                    </button>
+                  </td>
+                </tr>
+              ) : paginatedRows.length === 0 ? (
+                <tr>
+                  <td colSpan={(report.columns?.length || 0) + 1} style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
+                    <FileSpreadsheet size={36} color="#94a3b8" style={{ marginBottom: '10px' }} />
+                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>
+                      No matching records found
+                    </h3>
+                    <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
+                      Try adjusting your date range or filter criteria and click "Filter Report" again.
+                    </p>
                   </td>
                 </tr>
               ) : (

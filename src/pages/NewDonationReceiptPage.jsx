@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
 import { Sparkles, List } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 // Accurate Indian Numbering System to Words Converter
 function convertNumberToWords(num) {
@@ -80,9 +81,12 @@ export default function NewDonationReceiptPage({ user }) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const trustSession = getTrustSession();
+  const activeTrustUser = (!isSuperUser(user) && user) || trustSession?.user || {};
+
   const isSuperAdmin =
-    (user?.role && user.role.toLowerCase().includes('super')) ||
     Boolean(user?.isSuperAdmin) ||
+    (user?.role && user.role.toLowerCase().includes('super')) ||
     location.pathname.toLowerCase().startsWith('/superadmin');
 
   // Current Date format YYYY-MM-DD (e.g. 2026-09-09)
@@ -90,13 +94,13 @@ export default function NewDonationReceiptPage({ user }) {
 
   const getInitialReceiptNo = () => {
     try {
-      const activeUser = user || JSON.parse(localStorage.getItem('user_info') || '{}');
+      const activeUser = isSuperAdmin ? (user || {}) : activeTrustUser;
       const uEmail = (activeUser?.email || '').toLowerCase().trim();
       const profile = uEmail ? JSON.parse(localStorage.getItem(`profile_data_${uEmail}`) || '{}') : {};
       if (profile.receiptPrefix) {
         return `${profile.receiptPrefix}${profile.receiptStartNumber || '1'}`;
       }
-      const tName = activeUser?.trustName || profile.name || (activeUser?.name && !activeUser.name.toLowerCase().includes('super') ? activeUser.name : '');
+      const tName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || profile.name || (!isSuperUser(activeUser) ? activeUser?.name : '');
       const prefix = tName ? tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() : 'REC';
       return `${prefix}/2026-27/1`;
     } catch (e) {}
@@ -145,11 +149,9 @@ export default function NewDonationReceiptPage({ user }) {
 
   // Fetch next receipt number preview, donation heads, and donors list
   useEffect(() => {
-    const activeUser = user || (() => {
-      try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch (e) { return {}; }
-    })();
+    const activeUser = isSuperAdmin ? (user || {}) : activeTrustUser;
     const uEmail = (activeUser?.email || '').toLowerCase().trim();
-    let tName = activeUser?.trustName || (activeUser?.name && !activeUser.name.toLowerCase().includes('super') ? activeUser.name : '');
+    let tName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || (!isSuperUser(activeUser) ? activeUser?.name : '');
     let pPrefix = '';
     try {
       if (uEmail) {
@@ -327,12 +329,7 @@ export default function NewDonationReceiptPage({ user }) {
     } catch (e) {}
 
     try {
-      let localUser = {};
-      try {
-        localUser = JSON.parse(localStorage.getItem('user_info') || '{}');
-      } catch (e) {}
-
-      const activeUser = { ...localUser, ...(user || {}) };
+      const activeUser = isSuperAdmin ? (user || {}) : activeTrustUser;
       const uEmail = (activeUser?.email || '').toLowerCase().trim();
       let profileData = {};
       try {

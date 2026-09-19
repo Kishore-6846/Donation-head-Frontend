@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { Sparkles, Filter, RotateCcw, FileSpreadsheet, PlusCircle, Plus } from 'lucide-react';
+import { Sparkles, Filter, RotateCcw, FileSpreadsheet } from 'lucide-react';
 
 export default function ReceiptReportPage({ user: propUser }) {
   const location = useLocation();
@@ -13,6 +13,31 @@ export default function ReceiptReportPage({ user: propUser }) {
   const [financialYear, setFinancialYear] = useState('2026-2027');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [selectedTrust, setSelectedTrust] = useState('');
+  const [trustsList, setTrustsList] = useState([]);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetch('/api/users')
+        .then(res => res.json())
+        .then(data => {
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+          const names = list
+            .map(u => u.trustName || u.name)
+            .filter(Boolean);
+          const unique = Array.from(new Set(['Arulmigu Sivan Trust', ...names]));
+          setTrustsList(unique);
+        })
+        .catch(err => console.error('Error fetching trusts:', err));
+    }
+  }, [isSuperAdmin]);
+
+  const [activeFilterInfo, setActiveFilterInfo] = useState({
+    financialYear: '2026-2027',
+    fromDate: '',
+    toDate: '',
+    trust: ''
+  });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [allData, setAllData] = useState([]);
@@ -24,28 +49,15 @@ export default function ReceiptReportPage({ user: propUser }) {
   const [sortField, setSortField] = useState('receiptNo');
   const [sortDirection, setSortDirection] = useState('asc');
 
-  // Direct Entry State for adding receipt details directly
-  const [showAddDirect, setShowAddDirect] = useState(false);
-  const [directForm, setDirectForm] = useState({
-    receiptNo: '',
-    name: '',
-    phone: '',
-    donationHead: 'General Donation',
-    amount: '',
-    donationDate: new Date().toISOString().split('T')[0],
-    paymentMode: 'Wallet/UPI',
-    panNumber: '',
-    address: ''
-  });
-  const [addMessage, setAddMessage] = useState('');
-
-  const fetchReceipts = async (fy, fromD, toD) => {
+  const fetchReceipts = async (fy, fromD = fromDate, toD = toDate, trust = selectedTrust) => {
     setLoading(true);
     try {
       let url = `/api/reports/receipts?financialYear=${encodeURIComponent(fy || financialYear)}`;
       if (fromD) url += `&fromDate=${encodeURIComponent(fromD)}`;
       if (toD) url += `&toDate=${encodeURIComponent(toD)}`;
-      if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
+      if (trust) {
+        url += `&trustName=${encodeURIComponent(trust)}`;
+      } else if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
         url += `&trustEmail=${encodeURIComponent(currentUser?.email || '')}&trustName=${encodeURIComponent(currentUser?.trustName || currentUser?.name || '')}&trustId=${encodeURIComponent(currentUser?._id || '')}`;
       }
       const res = await fetch(url);
@@ -61,122 +73,46 @@ export default function ReceiptReportPage({ user: propUser }) {
   };
 
   const handleReset = () => {
+    setFinancialYear('2026-2027');
     setFromDate('');
     setToDate('');
+    setSelectedTrust('');
     setSearchTerm('');
     setCurrentPage(1);
     setIsSubmitted(false);
     setAllData([]);
   };
 
-  const handleAddDirect = async (e) => {
-    e.preventDefault();
-    if (!directForm.name || !directForm.amount) {
-      alert('Donor Name and Amount are required.');
-      return;
-    }
-
-    try {
-      const payload = {
-        receiptNo: directForm.receiptNo.trim() || undefined,
-        donorName: directForm.name.trim(),
-        phone: directForm.phone.trim(),
-        donationHead: directForm.donationHead || 'General',
-        amount: parseFloat(directForm.amount) || 0,
-        receiptDate: directForm.donationDate || new Date().toISOString().split('T')[0],
-        paymentMode: directForm.paymentMode || 'Online / UPI',
-        panNo: directForm.panNumber.trim().toUpperCase(),
-        address: directForm.address.trim(),
-        notes: 'Receipt generated directly via Receipts Report',
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      const res = await fetch('/api/receipts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-      const saved = json.success ? json.data : null;
-
-      const autoRcpt = saved?.receiptNo || directForm.receiptNo.trim() || `ASUF/2026-27/${Date.now().toString().slice(-4)}`;
-      const newEntry = {
-        _id: saved?._id || ('rc_' + Date.now()),
-        receiptNo: autoRcpt,
-        name: directForm.name,
-        phone: directForm.phone,
-        donationHead: directForm.donationHead,
-        panNumber: directForm.panNumber,
-        aadhaarNumber: '',
-        address: directForm.address,
-        amount: parseFloat(directForm.amount) || 0,
-        donationDate: directForm.donationDate,
-        paymentMode: directForm.paymentMode,
-        paymentDetails: directForm.paymentMode,
-        reference: saved?.reference || ('REF-' + Date.now().toString().slice(-6)),
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      setAllData(prev => [newEntry, ...prev]);
-      setIsSubmitted(true);
-      setAddMessage(`Successfully added receipt ${autoRcpt} for ${directForm.name} (₹${directForm.amount}) directly! Auto-synced to Admin Panel.`);
-      setTimeout(() => setAddMessage(''), 6000);
-      setDirectForm({
-        receiptNo: '',
-        name: '',
-        phone: '',
-        donationHead: 'General Donation',
-        amount: '',
-        donationDate: new Date().toISOString().split('T')[0],
-        paymentMode: 'Wallet/UPI',
-        panNumber: '',
-        address: ''
-      });
-
-      // Refetch live report from backend
-      fetchReceipts(financialYear, fromDate, toDate);
-    } catch (err) {
-      console.error('Error saving directly to receipts API:', err);
-      alert('Failed to save to server: ' + err.message);
-    }
-  };
-
   const handleDateFilterSubmit = (e) => {
     if (e) e.preventDefault();
     setIsSubmitted(true);
+    setActiveFilterInfo({ financialYear, fromDate, toDate, trust: selectedTrust });
     setCurrentPage(1);
-    fetchReceipts(financialYear, fromDate, toDate);
+    fetchReceipts(financialYear, fromDate, toDate, selectedTrust);
   };
 
-  const handleFYFilterSubmit = (e) => {
-    if (e) e.preventDefault();
-    setIsSubmitted(true);
-    setCurrentPage(1);
-    fetchReceipts(financialYear, '', '');
-  };
-
-  // Filter and Sort
+  // Filter and Sort Data
   const filteredAndSortedData = useMemo(() => {
     if (!isSubmitted) return [];
+
     let filtered = allData;
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = allData.filter(item =>
+        (item.trustName && item.trustName.toLowerCase().includes(term)) ||
         (item.receiptNo && item.receiptNo.toLowerCase().includes(term)) ||
         (item.name && item.name.toLowerCase().includes(term)) ||
         (item.phone && item.phone.toLowerCase().includes(term)) ||
         (item.donationHead && item.donationHead.toLowerCase().includes(term)) ||
+        (item.panNumber && item.panNumber.toLowerCase().includes(term)) ||
+        (item.aadhaarNumber && item.aadhaarNumber.toLowerCase().includes(term)) ||
         (item.address && item.address.toLowerCase().includes(term)) ||
         (item.amount && item.amount.toString().includes(term)) ||
         (item.donationDate && item.donationDate.toLowerCase().includes(term)) ||
         (item.paymentMode && item.paymentMode.toLowerCase().includes(term)) ||
         (item.paymentDetails && item.paymentDetails.toLowerCase().includes(term)) ||
+        (item.reference && item.reference.toLowerCase().includes(term)) ||
+        (item.additionalNotes && item.additionalNotes.toLowerCase().includes(term)) ||
         (item.createdBy && item.createdBy.toLowerCase().includes(term))
       );
     }
@@ -191,14 +127,6 @@ export default function ReceiptReportPage({ user: propUser }) {
         return sortDirection === 'asc' ? valA - valB : valB - valA;
       }
 
-      if (sortField === 'receiptNo') {
-        const numA = parseInt((valA.toString().match(/\d+$/) || [0])[0], 10);
-        const numB = parseInt((valB.toString().match(/\d+$/) || [0])[0], 10);
-        if (numA && numB) {
-          return sortDirection === 'asc' ? numA - numB : numB - numA;
-        }
-      }
-
       valA = valA.toString().toLowerCase();
       valB = valB.toString().toLowerCase();
       if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
@@ -207,15 +135,16 @@ export default function ReceiptReportPage({ user: propUser }) {
     });
 
     return sorted;
-  }, [allData, searchTerm, sortField, sortDirection]);
+  }, [allData, isSubmitted, searchTerm, sortField, sortDirection]);
 
   // Pagination calculation
-  const totalEntries = filteredAndSortedData.length;
+  const totalEntries = isSubmitted ? filteredAndSortedData.length : 0;
   const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedData = useMemo(() => {
+    if (!isSubmitted) return [];
     return filteredAndSortedData.slice(startIndex, startIndex + pageSize);
-  }, [filteredAndSortedData, startIndex, pageSize]);
+  }, [filteredAndSortedData, isSubmitted, startIndex, pageSize]);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -235,6 +164,7 @@ export default function ReceiptReportPage({ user: propUser }) {
 
     const headers = [
       'Receipt No.',
+      'User / Trust',
       'Name',
       'Phone',
       'Donation Head',
@@ -250,8 +180,9 @@ export default function ReceiptReportPage({ user: propUser }) {
       'Created By'
     ];
 
-    const rows = dataToExport.map((r) => [
+    const rows = dataToExport.map(r => [
       `"${r.receiptNo || ''}"`,
+      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
       `"${r.name || ''}"`,
       `"${r.phone || ''}"`,
       `"${r.donationHead || 'General'}"`,
@@ -260,7 +191,7 @@ export default function ReceiptReportPage({ user: propUser }) {
       `"${r.address || ''}"`,
       r.amount,
       `"${r.donationDate || ''}"`,
-      `"${r.paymentMode || 'Wallet/UPI'}"`,
+      `"${r.paymentMode || ''}"`,
       `"${r.paymentDetails || ''}"`,
       `"${r.reference || ''}"`,
       `"${r.additionalNotes || ''}"`,
@@ -304,7 +235,9 @@ export default function ReceiptReportPage({ user: propUser }) {
 
     const pages = [];
     if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
     } else {
       if (currentPage <= 4) {
         for (let i = 1; i <= 5; i++) pages.push(i);
@@ -403,20 +336,6 @@ export default function ReceiptReportPage({ user: propUser }) {
             Generate and export financial-year and date-wise audit reports of all donation receipts.
           </p>
         </div>
-        {isSuperAdmin && (
-          <div className="mint-hero-right">
-            <button
-              type="button"
-              className="btn-trust-primary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '15px' }}
-              onClick={() => setShowAddDirect(!showAddDirect)}
-              title="Add new donation receipt record directly to this report"
-            >
-              <PlusCircle size={18} strokeWidth={2.5} />
-              <span>{showAddDirect ? 'Close Direct Form' : '+ Add Receipt Directly'}</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Main Table Card Container */}
@@ -431,13 +350,35 @@ export default function ReceiptReportPage({ user: propUser }) {
             </div>
             {isSubmitted && (
               <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-                Showing results for <strong>{financialYear}</strong>
-                {fromDate && toDate ? ` (${fromDate} to ${toDate})` : ''}
+                Showing results for <strong>{activeFilterInfo.financialYear}</strong>
+                {activeFilterInfo.trust ? ` | Trust: ${activeFilterInfo.trust}` : ' | All Trusts'}
+                {activeFilterInfo.fromDate || activeFilterInfo.toDate
+                  ? ` | Period: ${activeFilterInfo.fromDate || 'Start'} to ${activeFilterInfo.toDate || 'End'}`
+                  : ' | Period: All Dates'}
               </span>
             )}
           </div>
 
           <form onSubmit={handleDateFilterSubmit} className="report-filter-grid">
+            {isSuperAdmin && (
+              <div className="report-field-group">
+                <label htmlFor="receiptTrustSelect" className="report-field-label">
+                  User / Trust
+                </label>
+                <select
+                  id="receiptTrustSelect"
+                  value={selectedTrust}
+                  onChange={(e) => setSelectedTrust(e.target.value)}
+                  className="report-field-select"
+                >
+                  <option value="">All Trusts / Users</option>
+                  {trustsList.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="report-field-group">
               <label htmlFor="fySelect" className="report-field-label">
                 Financial Year
@@ -496,7 +437,7 @@ export default function ReceiptReportPage({ user: propUser }) {
                 title="Reset filters"
               >
                 <RotateCcw size={15} />
-                <span>Reset Dates</span>
+                <span>Reset Filters</span>
               </button>
 
               <button
@@ -512,158 +453,11 @@ export default function ReceiptReportPage({ user: propUser }) {
           </form>
         </div>
 
-        {/* Inline Direct Entry Panel */}
-        {isSuperAdmin && showAddDirect && (
-          <div className="report-direct-add-panel">
-            <div className="report-direct-add-header">
-              <div className="report-direct-add-title">
-                <PlusCircle size={18} />
-                <span>Add Receipt Details Directly to Report</span>
-              </div>
-              <span style={{ fontSize: '12.5px', color: '#047857', fontWeight: 500 }}>
-                Directly inserts a new receipt into the current audit report
-              </span>
-            </div>
-
-            <form onSubmit={handleAddDirect}>
-              <div className="report-direct-add-grid">
-                <div className="report-field-group">
-                  <label className="report-field-label">Donor / Devotee Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Sivakumar M"
-                    className="report-field-input"
-                    value={directForm.name}
-                    onChange={e => setDirectForm({ ...directForm, name: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Donation Head</label>
-                  <select
-                    className="report-field-select"
-                    value={directForm.donationHead}
-                    onChange={e => setDirectForm({ ...directForm, donationHead: e.target.value })}
-                  >
-                    <option value="General Donation">General Donation</option>
-                    <option value="Annadhanam Scheme">Annadhanam Scheme</option>
-                    <option value="365 Drive">365 Drive</option>
-                    <option value="Food Drive">Food Drive</option>
-                    <option value="Temple Renovation / Corpus">Temple Renovation / Corpus</option>
-                    <option value="Special Archana & Puja">Special Archana & Puja</option>
-                  </select>
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Amount (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="e.g. 5000"
-                    className="report-field-input"
-                    value={directForm.amount}
-                    onChange={e => setDirectForm({ ...directForm, amount: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Receipt Date</label>
-                  <input
-                    type="date"
-                    className="report-field-input"
-                    value={directForm.donationDate}
-                    onChange={e => setDirectForm({ ...directForm, donationDate: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Payment Mode</label>
-                  <select
-                    className="report-field-select"
-                    value={directForm.paymentMode}
-                    onChange={e => setDirectForm({ ...directForm, paymentMode: e.target.value })}
-                  >
-                    <option value="Wallet/UPI">Wallet / UPI</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Cheque/Draft">Cheque / Demand Draft</option>
-                    <option value="Electronic/Bank Transfer">Electronic / Bank Transfer</option>
-                  </select>
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Phone Number</label>
-                  <input
-                    type="tel"
-                    placeholder="e.g. 9876543210"
-                    className="report-field-input"
-                    value={directForm.phone}
-                    onChange={e => setDirectForm({ ...directForm, phone: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">PAN Number</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. ABCDE1234F"
-                    className="report-field-input"
-                    style={{ textTransform: 'uppercase' }}
-                    value={directForm.panNumber}
-                    onChange={e => setDirectForm({ ...directForm, panNumber: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Receipt No. (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="Auto-generated if blank"
-                    className="report-field-input"
-                    value={directForm.receiptNo}
-                    onChange={e => setDirectForm({ ...directForm, receiptNo: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="report-field-label">Donor Address</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 45, Anna Nagar, Madurai, Tamil Nadu"
-                    className="report-field-input"
-                    value={directForm.address}
-                    onChange={e => setDirectForm({ ...directForm, address: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-filter-actions" style={{ marginTop: '6px' }}>
-                  <button type="submit" className="report-btn-submit">
-                    <Plus size={15} />
-                    <span>Save Receipt to Report</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="report-btn-secondary"
-                    onClick={() => setShowAddDirect(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {addMessage && (
-          <div style={{ padding: '12px 18px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px', border: '1px solid #86efac', marginBottom: '16px', fontSize: '13.5px', fontWeight: 600 }}>
-            ✓ {addMessage}
-          </div>
-        )}
-
         {/* Reports: - Label matching screenshot */}
         <div style={{ fontSize: '14.5px', fontWeight: '700', color: '#212529', marginBottom: '14px' }}>
-          Reports: -
+          {!isSubmitted
+            ? 'Reports: -'
+            : `Reports: ${activeFilterInfo.financialYear}${activeFilterInfo.trust ? ` (${activeFilterInfo.trust})` : ''}${activeFilterInfo.fromDate || activeFilterInfo.toDate ? ` [${activeFilterInfo.fromDate || 'Start'} - ${activeFilterInfo.toDate || 'End'}]` : ''}`}
         </div>
 
         {/* DataTables Controls: Show entries & Search */}
@@ -736,11 +530,14 @@ export default function ReceiptReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1750px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: '1930px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: '140px' }} onClick={() => handleSort('receiptNo')}>
                   Receipt No. {renderSortIndicator('receiptNo')}
+                </th>
+                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                  User / Trust {renderSortIndicator('trustName')}
                 </th>
                 <th style={{ ...thStyle, width: '170px' }} onClick={() => handleSort('name')}>
                   Name {renderSortIndicator('name')}
@@ -787,7 +584,7 @@ export default function ReceiptReportPage({ user: propUser }) {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -803,7 +600,7 @@ export default function ReceiptReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -820,6 +617,7 @@ export default function ReceiptReportPage({ user: propUser }) {
                 paginatedData.map((row, idx) => (
                   <tr key={row.receiptNo || idx}>
                     <td style={tdStyle}>{row.receiptNo}</td>
+                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>
                     <td style={tdStyle}>{row.phone || ''}</td>
                     <td style={tdStyle}>{row.donationHead || 'General'}</td>

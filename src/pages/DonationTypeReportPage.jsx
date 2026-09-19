@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { Sparkles, Layers, Filter, RotateCcw, FileSpreadsheet, PlusCircle, Plus } from 'lucide-react';
+import { Sparkles, Layers, Filter, RotateCcw, FileSpreadsheet } from 'lucide-react';
 
 export default function DonationTypeReportPage({ user: propUser }) {
   const location = useLocation();
@@ -13,6 +13,8 @@ export default function DonationTypeReportPage({ user: propUser }) {
   const [donationType, setDonationType] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [selectedTrust, setSelectedTrust] = useState('');
+  const [trustsList, setTrustsList] = useState([]);
   const [typesList, setTypesList] = useState([
     'Corpus Donation',
     'Voluntary Donation',
@@ -28,12 +30,27 @@ export default function DonationTypeReportPage({ user: propUser }) {
         }
       })
       .catch(err => console.error('Error fetching types:', err));
-  }, []);
+
+    if (isSuperAdmin) {
+      fetch('/api/users')
+        .then(res => res.json())
+        .then(data => {
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+          const names = list
+            .map(u => u.trustName || u.name)
+            .filter(Boolean);
+          const unique = Array.from(new Set(['Arulmigu Sivan Trust', ...names]));
+          setTrustsList(unique);
+        })
+        .catch(err => console.error('Error fetching trusts:', err));
+    }
+  }, [isSuperAdmin]);
 
   const [activeFilter, setActiveFilter] = useState({
     type: '',
     from: '',
-    to: ''
+    to: '',
+    trust: ''
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -46,30 +63,17 @@ export default function DonationTypeReportPage({ user: propUser }) {
   const [sortField, setSortField] = useState('receiptNo');
   const [sortDirection, setSortDirection] = useState('asc');
 
-  // Direct Entry State for adding type-specific records directly
-  const [showAddDirect, setShowAddDirect] = useState(false);
-  const [directForm, setDirectForm] = useState({
-    receiptNo: '',
-    name: '',
-    donationType: '',
-    donationHead: 'General Donation',
-    amount: '',
-    date: new Date().toISOString().split('T')[0],
-    panNumber: '',
-    aadhaarNumber: '',
-    address: '',
-    reference: ''
-  });
-  const [addMessage, setAddMessage] = useState('');
-
-  const fetchTypeReport = async (type, fromD, toD) => {
+  const fetchTypeReport = async (type = donationType, fromD = fromDate, toD = toDate, trust = selectedTrust) => {
     setLoading(true);
     try {
-      let url = `/api/reports/type-report?donationType=${encodeURIComponent(type || 'Voluntary Donation')}`;
-      if (fromD) url += `&fromDate=${encodeURIComponent(fromD)}`;
-      if (toD) url += `&toDate=${encodeURIComponent(toD)}`;
-      if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
-        url += `&trustEmail=${encodeURIComponent(currentUser?.email || '')}&trustName=${encodeURIComponent(currentUser?.trustName || currentUser?.name || '')}&trustId=${encodeURIComponent(currentUser?._id || '')}`;
+      let url = `/api/reports/type-report?`;
+      if (type) url += `donationType=${encodeURIComponent(type)}&`;
+      if (fromD) url += `fromDate=${encodeURIComponent(fromD)}&`;
+      if (toD) url += `toDate=${encodeURIComponent(toD)}&`;
+      if (trust) {
+        url += `trustName=${encodeURIComponent(trust)}&`;
+      } else if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
+        url += `trustEmail=${encodeURIComponent(currentUser?.email || '')}&trustName=${encodeURIComponent(currentUser?.trustName || currentUser?.name || '')}&trustId=${encodeURIComponent(currentUser?._id || '')}`;
       }
       const res = await fetch(url);
       const data = await res.json();
@@ -87,98 +91,19 @@ export default function DonationTypeReportPage({ user: propUser }) {
     setDonationType('');
     setFromDate('');
     setToDate('');
+    setSelectedTrust('');
     setSearchTerm('');
     setCurrentPage(1);
     setIsSubmitted(false);
     setAllData([]);
   };
 
-  const handleAddDirect = async (e) => {
-    e.preventDefault();
-    if (!directForm.name || !directForm.amount) {
-      alert('Donor Name and Amount are required.');
-      return;
-    }
-    const chosenType = directForm.donationType || donationType || typesList[0] || 'Voluntary Donation';
-
-    try {
-      const payload = {
-        receiptNo: directForm.receiptNo.trim() || undefined,
-        donorName: directForm.name.trim(),
-        donationType: chosenType,
-        donationHead: directForm.donationHead || 'General',
-        amount: parseFloat(directForm.amount) || 0,
-        receiptDate: directForm.date || new Date().toISOString().split('T')[0],
-        paymentMode: 'Online / UPI',
-        panNo: directForm.panNumber.trim().toUpperCase(),
-        aadhaarNo: directForm.aadhaarNumber.trim(),
-        address: directForm.address.trim(),
-        reference: directForm.reference.trim() || 'DIRECT-TYPE-ENTRY',
-        notes: `Donation Type Entry: ${chosenType}`,
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      const res = await fetch('/api/receipts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-      const saved = json.success ? json.data : null;
-
-      const autoRcpt = saved?.receiptNo || directForm.receiptNo.trim() || `ASUF/2026-27/${Date.now().toString().slice(-4)}`;
-      const newEntry = {
-        _id: saved?._id || ('dtr_' + Date.now()),
-        receiptNo: autoRcpt,
-        name: directForm.name,
-        panNumber: directForm.panNumber,
-        aadhaarNumber: directForm.aadhaarNumber,
-        donationHead: directForm.donationHead,
-        donationType: chosenType,
-        address: directForm.address,
-        amount: parseFloat(directForm.amount) || 0,
-        reference: directForm.reference || saved?.reference || 'DIRECT-TYPE-ENTRY',
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      setAllData(prev => [newEntry, ...prev]);
-      setIsSubmitted(true);
-      setActiveFilter(prev => ({ ...prev, type: chosenType, from: directForm.date, to: directForm.date }));
-      setAddMessage(`Successfully added ${directForm.name} under "${chosenType}" (₹${directForm.amount}) directly! Auto-synced to Admin Panel.`);
-      setTimeout(() => setAddMessage(''), 6000);
-      setDirectForm({
-        receiptNo: '',
-        name: '',
-        donationType: '',
-        donationHead: 'General Donation',
-        amount: '',
-        date: new Date().toISOString().split('T')[0],
-        panNumber: '',
-        aadhaarNumber: '',
-        address: '',
-        reference: ''
-      });
-
-      // Refetch live report from backend
-      fetchTypeReport(chosenType, fromDate, toDate);
-    } catch (err) {
-      console.error('Error saving directly to receipts API:', err);
-      alert('Failed to save to server: ' + err.message);
-    }
-  };
-
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
     setIsSubmitted(true);
-    setActiveFilter({ type: donationType, from: fromDate, to: toDate });
+    setActiveFilter({ type: donationType, from: fromDate, to: toDate, trust: selectedTrust });
     setCurrentPage(1);
-    fetchTypeReport(donationType, fromDate, toDate);
+    fetchTypeReport(donationType, fromDate, toDate, selectedTrust);
   };
 
   // Filter and Sort
@@ -197,7 +122,8 @@ export default function DonationTypeReportPage({ user: propUser }) {
         (item.donationType && item.donationType.toLowerCase().includes(term)) ||
         (item.address && item.address.toLowerCase().includes(term)) ||
         (item.amount && item.amount.toString().includes(term)) ||
-        (item.reference && item.reference.toLowerCase().includes(term))
+        (item.reference && item.reference.toLowerCase().includes(term)) ||
+        (item.trustName && item.trustName.toLowerCase().includes(term))
       );
     }
 
@@ -255,6 +181,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
     }
 
     const headers = [
+      'User / Trust',
       'Receipt No.',
       'Name',
       'Pan Number',
@@ -267,6 +194,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
     ];
 
     const rows = dataToExport.map((r) => [
+      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
       `"${r.receiptNo || ''}"`,
       `"${r.name || ''}"`,
       `"${r.panNumber || ''}"`,
@@ -414,20 +342,6 @@ export default function DonationTypeReportPage({ user: propUser }) {
             Segment, filter, and export donation collections according to specific donation types.
           </p>
         </div>
-        {isSuperAdmin && (
-          <div className="mint-hero-right">
-            <button
-              type="button"
-              className="btn-trust-primary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '15px' }}
-              onClick={() => setShowAddDirect(!showAddDirect)}
-              title="Add new donation type entry directly"
-            >
-              <PlusCircle size={18} strokeWidth={2.5} />
-              <span>{showAddDirect ? 'Close Direct Form' : '+ Add Type Entry Directly'}</span>
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="mint-table-card-container">
@@ -440,24 +354,43 @@ export default function DonationTypeReportPage({ user: propUser }) {
             </div>
             {isSubmitted && (
               <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-                Type: <strong>{activeFilter.type || 'All Types'}</strong> | Period: <strong>{activeFilter.from}</strong> to <strong>{activeFilter.to}</strong>
+                Type: <strong>{activeFilter.type || 'All Types'}</strong> | Period: {activeFilter.from || activeFilter.to ? <><strong>{activeFilter.from || 'Start'}</strong> to <strong>{activeFilter.to || 'Present'}</strong></> : <strong>All Dates</strong>}
+                {activeFilter.trust && <> | Trust: <strong>{activeFilter.trust}</strong></>}
               </span>
             )}
           </div>
 
           <form onSubmit={handleSubmit} className="report-filter-grid">
+            {isSuperAdmin && (
+              <div className="report-field-group">
+                <label htmlFor="typeTrustSelect" className="report-field-label">
+                  User / Trust
+                </label>
+                <select
+                  id="typeTrustSelect"
+                  value={selectedTrust}
+                  onChange={(e) => setSelectedTrust(e.target.value)}
+                  className="report-field-input"
+                >
+                  <option value="">All Trusts / Users</option>
+                  {trustsList.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="report-field-group">
               <label htmlFor="typeSelect" className="report-field-label">
-                Donation Type
+                Donation Type (Optional)
               </label>
               <select
                 id="typeSelect"
                 value={donationType}
                 onChange={(e) => setDonationType(e.target.value)}
-                required
                 className="report-field-select"
               >
-                <option value="">-- Select Donation Type --</option>
+                <option value="">All Donation Types</option>
                 {typesList.map(t => (
                   <option key={t} value={t}>{t}</option>
                 ))}
@@ -466,12 +399,11 @@ export default function DonationTypeReportPage({ user: propUser }) {
 
             <div className="report-field-group">
               <label htmlFor="typeFromDate" className="report-field-label">
-                From Date
+                From Date (Optional)
               </label>
               <input
                 id="typeFromDate"
                 type="date"
-                required
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
                 className="report-field-input"
@@ -480,12 +412,11 @@ export default function DonationTypeReportPage({ user: propUser }) {
 
             <div className="report-field-group">
               <label htmlFor="typeToDate" className="report-field-label">
-                To Date
+                To Date (Optional)
               </label>
               <input
                 id="typeToDate"
                 type="date"
-                required
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
                 className="report-field-input"
@@ -521,144 +452,11 @@ export default function DonationTypeReportPage({ user: propUser }) {
           </form>
         </div>
 
-        {/* Inline Direct Entry Panel */}
-        {isSuperAdmin && showAddDirect && (
-          <div className="report-direct-add-panel">
-            <div className="report-direct-add-header">
-              <div className="report-direct-add-title">
-                <PlusCircle size={18} />
-                <span>Add Donation Type Record Directly</span>
-              </div>
-              <span style={{ fontSize: '12.5px', color: '#047857', fontWeight: 500 }}>
-                Directly inserts a categorical donation record into this report
-              </span>
-            </div>
-
-            <form onSubmit={handleAddDirect}>
-              <div className="report-direct-add-grid">
-                <div className="report-field-group">
-                  <label className="report-field-label">Donor Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Balasubramanian V"
-                    className="report-field-input"
-                    value={directForm.name}
-                    onChange={e => setDirectForm({ ...directForm, name: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Donation Type</label>
-                  <select
-                    className="report-field-select"
-                    value={directForm.donationType || donationType}
-                    onChange={e => setDirectForm({ ...directForm, donationType: e.target.value })}
-                  >
-                    <option value="">-- Select Type --</option>
-                    {typesList.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Amount (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="e.g. 7500"
-                    className="report-field-input"
-                    value={directForm.amount}
-                    onChange={e => setDirectForm({ ...directForm, amount: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Donation Head</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Corpus Fund"
-                    className="report-field-input"
-                    value={directForm.donationHead}
-                    onChange={e => setDirectForm({ ...directForm, donationHead: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Date</label>
-                  <input
-                    type="date"
-                    className="report-field-input"
-                    value={directForm.date}
-                    onChange={e => setDirectForm({ ...directForm, date: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">PAN Number</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. ABCDE1234F"
-                    className="report-field-input"
-                    style={{ textTransform: 'uppercase' }}
-                    value={directForm.panNumber}
-                    onChange={e => setDirectForm({ ...directForm, panNumber: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Receipt No. (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="Auto-generated if blank"
-                    className="report-field-input"
-                    value={directForm.receiptNo}
-                    onChange={e => setDirectForm({ ...directForm, receiptNo: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="report-field-label">Donor Address</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 55, South Street, Tirunelveli, Tamil Nadu"
-                    className="report-field-input"
-                    value={directForm.address}
-                    onChange={e => setDirectForm({ ...directForm, address: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-filter-actions" style={{ marginTop: '6px' }}>
-                  <button type="submit" className="report-btn-submit">
-                    <Plus size={15} />
-                    <span>Save to Type Report</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="report-btn-secondary"
-                    onClick={() => setShowAddDirect(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {addMessage && (
-          <div style={{ padding: '12px 18px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px', border: '1px solid #86efac', marginBottom: '16px', fontSize: '13.5px', fontWeight: 600 }}>
-            ✓ {addMessage}
-          </div>
-        )}
-
         {/* Dynamic Report Subtitle matching Screenshot 1 & 2 */}
         <div style={{ fontSize: '14px', fontWeight: '700', color: '#212529', marginBottom: '14px' }}>
           {!isSubmitted
-            ? 'Report for "" Date: -'
-            : `Report for "${activeFilter.type || 'Voluntary Donation'}" Date: ${activeFilter.from} - ${activeFilter.to}`}
+            ? 'Reports: -'
+            : `Report for "${activeFilter.type || 'All Donation Types'}" Date: ${activeFilter.from || 'All'} - ${activeFilter.to || 'All'}${activeFilter.trust ? ` (${activeFilter.trust})` : ''}`}
         </div>
 
         {/* DataTables Controls: Show entries & Search */}
@@ -731,9 +529,12 @@ export default function DonationTypeReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1400px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: '1600px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
+                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                  User / Trust {renderSortIndicator('trustName')}
+                </th>
                 <th style={{ ...thStyle, width: '160px' }} onClick={() => handleSort('receiptNo')}>
                   Receipt No. {renderSortIndicator('receiptNo')}
                 </th>
@@ -767,7 +568,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -783,7 +584,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -799,7 +600,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -815,6 +616,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
               ) : (
                 paginatedData.map((row, idx) => (
                   <tr key={row.receiptNo || idx}>
+                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
                     <td style={tdStyle}>{row.receiptNo}</td>
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>
                     <td style={tdStyle}>{row.panNumber || ''}</td>

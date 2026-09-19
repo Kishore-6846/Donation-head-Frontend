@@ -117,7 +117,7 @@ export default function BuyStaffUsersPage({ user }) {
 
       // 3. Open Razorpay Checkout Window
       const options = {
-        key: data.keyId || 'rzp_test_1DP5mmOlF5G5ag',
+        key: data.keyId || 'rzp_test_TdnRfnHpDeyWqd',
         amount: data.order.amount,
         currency: data.order.currency || 'INR',
         name: 'DonationReceipt.in',
@@ -143,7 +143,11 @@ export default function BuyStaffUsersPage({ user }) {
             await fetch('/api/payment/verify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(paymentResponse)
+              body: JSON.stringify({
+                ...paymentResponse,
+                email: formData.email,
+                staffCount: count
+              })
             });
           } catch (err) {
             console.error('Verification error:', err);
@@ -153,10 +157,10 @@ export default function BuyStaffUsersPage({ user }) {
             isOpen: true,
             type: 'success',
             title: 'Payment Successful!',
-            message: `Payment of ₹${grandTotal} completed successfully via Razorpay! Payment ID: ${paymentResponse.razorpay_payment_id || 'pay_success'}`,
+            message: `Payment of ₹${grandTotal} completed successfully via Razorpay! ${count} Additional Staff User(s) have been added to your trust account. (Payment ID: ${paymentResponse.razorpay_payment_id || 'pay_success'})`,
             onConfirm: () => {
               setPopup(p => ({ ...p, isOpen: false }));
-              navigate('/trust');
+              navigate('/trust/staff');
             }
           });
         },

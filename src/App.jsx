@@ -66,58 +66,65 @@ import TrustNotificationsPage from './pages/TrustNotificationsPage';
 import SuperAdminLoginPage from './pages/SuperAdminLoginPage';
 import SuperAdminRegisterPage from './pages/SuperAdminRegisterPage';
 import TrustDetailsViewPage from './pages/TrustDetailsViewPage';
+import {
+  getSuperAdminSession,
+  getTrustSession,
+  setSuperAdminSession,
+  setTrustSession,
+  clearSuperAdminSession,
+  clearTrustSession,
+  isSuperAdminPath,
+  isSuperUser
+} from './utils/authStorage';
+
+// Check if a path is a Super Admin route
+function isSuperAdminPathCheck(pathLower) {
+  return (
+    pathLower.startsWith('/superadmin') ||
+    pathLower.startsWith('/super-admin') ||
+    pathLower === '/plans' ||
+    pathLower === '/new-plan' ||
+    pathLower.startsWith('/edit-plan') ||
+    pathLower === '/users' ||
+    pathLower === '/new-user' ||
+    pathLower.startsWith('/edit-user') ||
+    pathLower === '/employees' ||
+    pathLower === '/new-employee' ||
+    pathLower.startsWith('/edit-employee') ||
+    pathLower === '/receipt-types' ||
+    pathLower === '/new-receipt-type' ||
+    pathLower.startsWith('/edit-receipt-type') ||
+    pathLower === '/all-receipts' ||
+    pathLower === '/all-reports' ||
+    pathLower === '/published-reports' ||
+    pathLower === '/notifications' ||
+    pathLower === '/new-notification' ||
+    pathLower.startsWith('/edit-notification') ||
+    pathLower === '/report-types' ||
+    pathLower === '/new-report-type' ||
+    pathLower.startsWith('/edit-report-type') ||
+    pathLower === '/superadmin-reports'
+  );
+}
 
 // Protected Route Guard:
-// Unauthenticated Super Admin routes redirect to /superadmin/register
+// Unauthenticated Super Admin routes redirect to /superadmin/login
 // Unauthenticated Trust routes redirect to /trust/login
-function ProtectedLayout({ user }) {
+function ProtectedLayout({ superAdminUser, trustUser }) {
   const location = useLocation();
+  const pathLower = location.pathname.toLowerCase();
+  const isSuperRoute = isSuperAdminPathCheck(pathLower);
 
-  if (!user) {
-    const pathLower = location.pathname.toLowerCase();
-    const isSuperAdminRoute =
-      pathLower.startsWith('/superadmin') ||
-      pathLower.startsWith('/super-admin') ||
-      pathLower === '/plans' ||
-      pathLower === '/new-plan' ||
-      pathLower.startsWith('/edit-plan') ||
-      pathLower === '/users' ||
-      pathLower === '/new-user' ||
-      pathLower.startsWith('/edit-user') ||
-      pathLower === '/employees' ||
-      pathLower === '/new-employee' ||
-      pathLower.startsWith('/edit-employee') ||
-      pathLower === '/donation-heads' ||
-      pathLower === '/donation-head' ||
-      pathLower === '/new-donation-head' ||
-      pathLower.startsWith('/edit-donation-head') ||
-      pathLower === '/receipt-types' ||
-      pathLower === '/new-receipt-type' ||
-      pathLower.startsWith('/edit-receipt-type') ||
-      pathLower === '/all-receipts' ||
-      pathLower === '/all-reports' ||
-      pathLower === '/published-reports' ||
-      pathLower === '/notifications' ||
-      pathLower === '/new-notification' ||
-      pathLower.startsWith('/edit-notification') ||
-      pathLower === '/report-types' ||
-      pathLower === '/new-report-type' ||
-      pathLower.startsWith('/edit-report-type') ||
-      pathLower === '/superadmin-reports';
-
-    if (isSuperAdminRoute) {
-      return <Navigate to="/superadmin/register" replace />;
+  if (isSuperRoute) {
+    if (!superAdminUser) {
+      return <Navigate to="/superadmin/login" replace />;
     }
-    return <Navigate to="/trust/login" replace />;
+    return <Outlet />;
   }
 
-  const pathLower = location.pathname.toLowerCase();
-  const isSuperRole = user?.role?.toLowerCase()?.includes('super');
-  const isSuperAdminRoute = pathLower.startsWith('/superadmin');
-
-  // Guard superadmin console from non-superadmin users
-  if (isSuperAdminRoute && !isSuperRole) {
-    return <Navigate to="/superadmin/register" replace />;
+  // Trust portal routes strictly require trustUser (Super Admin cannot pose as a Trust user)
+  if (!trustUser) {
+    return <Navigate to="/trust/login" replace />;
   }
 
   return <Outlet />;
@@ -127,6 +134,7 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isSuperAdminRoute = isSuperAdminPathCheck(location.pathname.toLowerCase());
 
   // Global Dialog State to replace browser default popups everywhere
   const [globalDialog, setGlobalDialog] = useState({
@@ -168,42 +176,67 @@ function AppContent() {
     setSidebarOpen(false);
   }, [location.pathname]);
 
-  // Read authenticated session strictly from localStorage (null if unauthenticated)
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('user_info');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && (parsed.email || parsed.id || parsed._id)) {
-          return parsed;
-        }
-      } catch (e) {
-        return null;
+  // Manage separate, isolated sessions for Super Admin and Trust Admin
+  const [superAdminUser, setSuperAdminUser] = useState(() => getSuperAdminSession()?.user || null);
+  const [trustUser, setTrustUser] = useState(() => getTrustSession()?.user || null);
+
+  useEffect(() => {
+    const onSuperChange = (e) => setSuperAdminUser(e.detail);
+    const onTrustChange = (e) => setTrustUser(e.detail);
+    window.addEventListener('superadmin-session-change', onSuperChange);
+    window.addEventListener('trust-session-change', onTrustChange);
+    return () => {
+      window.removeEventListener('superadmin-session-change', onSuperChange);
+      window.removeEventListener('trust-session-change', onTrustChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isSuperAdminRoute) {
+      const sess = getSuperAdminSession();
+      if (sess?.user && isSuperUser(sess.user)) {
+        setSuperAdminUser(sess.user);
+      }
+    } else {
+      const sess = getTrustSession();
+      if (sess?.user && !isSuperUser(sess.user)) {
+        setTrustUser(sess.user);
       }
     }
-    return null;
-  });
+  }, [location.pathname]);
+
+  const activeSuperUser = (superAdminUser && isSuperUser(superAdminUser)) ? superAdminUser : getSuperAdminSession()?.user;
+  const activeTrustUser = (trustUser && !isSuperUser(trustUser)) ? trustUser : getTrustSession()?.user;
+  const user = isSuperAdminRoute ? activeSuperUser : activeTrustUser;
 
   const handleLogout = () => {
-    const isSuper = user?.role?.toLowerCase()?.includes('super') || location.pathname.toLowerCase().startsWith('/superadmin');
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_info');
-    localStorage.removeItem('profile_data');
-    setUser(null);
-    if (isSuper) {
+    if (isSuperAdminRoute) {
+      clearSuperAdminSession();
+      setSuperAdminUser(null);
       navigate('/superadmin/login', { replace: true });
     } else {
+      clearTrustSession();
+      setTrustUser(null);
       navigate('/trust/login', { replace: true });
     }
   };
 
-  const handleLoginSuccess = (userData) => {
-    setUser(userData);
+  const handleSuperAdminLoginSuccess = (userData) => {
+    setSuperAdminUser(userData);
+  };
+
+  const handleTrustLoginSuccess = (userData) => {
+    setTrustUser(userData);
   };
 
   const handleUpdateUser = (updatedUserData) => {
-    setUser(updatedUserData);
-    localStorage.setItem('user_info', JSON.stringify(updatedUserData));
+    if (isSuperAdminRoute) {
+      setSuperAdminSession(updatedUserData);
+      setSuperAdminUser(updatedUserData);
+    } else {
+      setTrustSession(updatedUserData);
+      setTrustUser(updatedUserData);
+    }
   };
 
   const isAuthPage =
@@ -287,7 +320,7 @@ function AppContent() {
             {/* Public Super Admin Auth Routes */}
             <Route
               path="/superadmin/login"
-              element={user?.role?.toLowerCase()?.includes('super') ? <Navigate to="/superadmin" replace /> : <SuperAdminLoginPage onLoginSuccess={handleLoginSuccess} />}
+              element={superAdminUser ? <Navigate to="/superadmin" replace /> : <SuperAdminLoginPage onLoginSuccess={handleSuperAdminLoginSuccess} />}
             />
             <Route
               path="/superAdmin/login"
@@ -304,7 +337,7 @@ function AppContent() {
 
             <Route
               path="/superadmin/register"
-              element={user?.role?.toLowerCase()?.includes('super') ? <Navigate to="/superadmin" replace /> : <SuperAdminRegisterPage onLoginSuccess={handleLoginSuccess} />}
+              element={superAdminUser ? <Navigate to="/superadmin" replace /> : <SuperAdminRegisterPage onLoginSuccess={handleSuperAdminLoginSuccess} />}
             />
             <Route
               path="/superAdmin/register"
@@ -335,10 +368,10 @@ function AppContent() {
               element={<Navigate to="/superadmin/register" replace />}
             />
 
-            {/* Public Login Routes: If already authenticated, redirect to /trust */}
+            {/* Public Login Routes: If already authenticated as Trust Admin, redirect to /trust */}
             <Route
               path="/trust/login"
-              element={user ? <Navigate to="/trust" replace /> : <LoginPage onLoginSuccess={handleLoginSuccess} />}
+              element={trustUser ? <Navigate to="/trust" replace /> : <LoginPage onLoginSuccess={handleTrustLoginSuccess} />}
             />
             <Route
               path="/trust/login.php"
@@ -346,7 +379,7 @@ function AppContent() {
             />
             <Route
               path="/login"
-              element={user ? <Navigate to="/trust" replace /> : <LoginPage onLoginSuccess={handleLoginSuccess} />}
+              element={trustUser ? <Navigate to="/trust" replace /> : <LoginPage onLoginSuccess={handleTrustLoginSuccess} />}
             />
             <Route
               path="/login.php"
@@ -356,7 +389,7 @@ function AppContent() {
             {/* Public Registration Routes */}
             <Route
               path="/trust/register"
-              element={user ? <Navigate to="/trust" replace /> : <RegisterPage onLoginSuccess={handleLoginSuccess} />}
+              element={trustUser ? <Navigate to="/trust" replace /> : <RegisterPage onLoginSuccess={handleTrustLoginSuccess} />}
             />
             <Route
               path="/trust/register.php"
@@ -372,7 +405,7 @@ function AppContent() {
             />
             <Route
               path="/register"
-              element={user ? <Navigate to="/trust" replace /> : <RegisterPage onLoginSuccess={handleLoginSuccess} />}
+              element={trustUser ? <Navigate to="/trust" replace /> : <RegisterPage onLoginSuccess={handleTrustLoginSuccess} />}
             />
             <Route
               path="/register.php"
@@ -414,10 +447,10 @@ function AppContent() {
             <Route path="/print-receipt.php" element={<PrintReceiptPage user={user} />} />
 
             {/* =========================================================
-                Protected Trust Panel Routes (Strictly Require Login)
-                If unauthenticated, ProtectedLayout redirects to /trust/login
+                Protected Routes (Super Admin & Trust Panels)
+                Super Admin requires superAdminUser; Trust requires trustUser
                 ========================================================= */}
-            <Route element={<ProtectedLayout user={user} />}>
+            <Route element={<ProtectedLayout superAdminUser={superAdminUser} trustUser={trustUser} />}>
               {/* Super Admin Primary Routes */}
               <Route path="/superadmin" element={<SuperAdminDashboardPage user={user} />} />
               <Route path="/superadmin/" element={<SuperAdminDashboardPage user={user} />} />
@@ -522,6 +555,8 @@ function AppContent() {
               <Route path="/published-reports" element={<PublishedReportsPage />} />
               <Route path="/notifications" element={<NotificationsManagementPage />} />
               <Route path="/superadmin-reports" element={<SuperAdminReportsPage />} />
+              <Route path="/superadmin/revenue" element={<SuperAdminReportsPage />} />
+              <Route path="/superadmin/subscription-revenue" element={<SuperAdminReportsPage />} />
 
               {/* Trust & Admin Dashboard Aliases */}
               <Route path="/admin" element={<TrustDashboardPage user={user} />} />
@@ -556,11 +591,11 @@ function AppContent() {
               <Route path="/trust/donation_receipt" element={<DonationReceiptsPage user={user} />} />
               <Route path="/trust/donation-receipt.php" element={<Navigate to="/trust/donation-receipt" replace />} />
               <Route path="/trust/donation_receipt.php" element={<Navigate to="/trust/donation-receipt" replace />} />
-              <Route path="/trust/dl-receipts" element={<DownloadBulkReceiptsPage />} />
-              <Route path="/trust/dl_receipts" element={<DownloadBulkReceiptsPage />} />
+              <Route path="/trust/dl-receipts" element={<DownloadBulkReceiptsPage user={user} />} />
+              <Route path="/trust/dl_receipts" element={<DownloadBulkReceiptsPage user={user} />} />
               <Route path="/trust/dl-receipts.php" element={<Navigate to="/trust/dl-receipts" replace />} />
               <Route path="/trust/dl_receipts.php" element={<Navigate to="/trust/dl-receipts" replace />} />
-              <Route path="/trust/export-receipts" element={<DownloadBulkReceiptsPage />} />
+              <Route path="/trust/export-receipts" element={<DownloadBulkReceiptsPage user={user} />} />
               <Route path="/trust/export-receipts.php" element={<Navigate to="/trust/dl-receipts" replace />} />
 
               {/* Roles & Permissions */}
@@ -653,22 +688,23 @@ function AppContent() {
               <Route path="/trust/published-reports" element={<PublishedReportsPage user={user} />} />
 
               {/* Profile & Settings */}
-              <Route path="/trust/my-profile" element={<MyProfilePage user={user} />} />
-              <Route path="/trust/profile" element={<MyProfilePage user={user} />} />
-              <Route path="/superadmin/my-profile" element={<MyProfilePage user={user} />} />
-              <Route path="/superadmin/profile" element={<MyProfilePage user={user} />} />
-              <Route path="/my-profile" element={<MyProfilePage user={user} />} />
-              <Route path="/profile" element={<MyProfilePage user={user} />} />
+              <Route path="/trust/my-profile" element={<MyProfilePage user={activeTrustUser} />} />
+              <Route path="/trust/profile" element={<Navigate to="/trust/my-profile" replace />} />
+              <Route path="/superadmin/my-profile" element={<MyProfilePage user={activeSuperUser} />} />
+              <Route path="/superadmin/profile" element={<Navigate to="/superadmin/my-profile" replace />} />
+              <Route path="/my-profile" element={<Navigate to={isSuperAdminRoute ? "/superadmin/my-profile" : "/trust/my-profile"} replace />} />
+              <Route path="/profile" element={<Navigate to={isSuperAdminRoute ? "/superadmin/my-profile" : "/trust/my-profile"} replace />} />
               <Route path="/trust/my-profile.php" element={<Navigate to="/trust/my-profile" replace />} />
               <Route path="/trust/profile.php" element={<Navigate to="/trust/my-profile" replace />} />
-              <Route path="/trust/edit-profile" element={<EditProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
-              <Route path="/trust/edit_profile" element={<EditProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
-              <Route path="/trust/editprofile" element={<EditProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
-              <Route path="/superadmin/edit-profile" element={<EditProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
-              <Route path="/edit-profile" element={<EditProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
-              <Route path="/trust/edit-profile.php" element={<EditProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
-              <Route path="/trust/edit_profile.php" element={<EditProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
-              <Route path="/trust/editprofile.php" element={<EditProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
+              <Route path="/trust/edit-profile" element={<EditProfilePage user={activeTrustUser} onUpdateUser={handleUpdateUser} />} />
+              <Route path="/trust/edit_profile" element={<Navigate to="/trust/edit-profile" replace />} />
+              <Route path="/trust/editprofile" element={<Navigate to="/trust/edit-profile" replace />} />
+              <Route path="/superadmin/edit-profile" element={<EditProfilePage user={activeSuperUser} onUpdateUser={handleUpdateUser} />} />
+              <Route path="/superadmin/edit_profile" element={<Navigate to="/superadmin/edit-profile" replace />} />
+              <Route path="/edit-profile" element={<Navigate to={isSuperAdminRoute ? "/superadmin/edit-profile" : "/trust/edit-profile"} replace />} />
+              <Route path="/trust/edit-profile.php" element={<Navigate to="/trust/edit-profile" replace />} />
+              <Route path="/trust/edit_profile.php" element={<Navigate to="/trust/edit-profile" replace />} />
+              <Route path="/trust/editprofile.php" element={<Navigate to="/trust/edit-profile" replace />} />
 
               {/* Certificates & 80G Vault */}
               <Route path="/trust/all-certificate" element={<AllCertificatesPage user={user} />} />
@@ -719,6 +755,7 @@ function AppContent() {
               <Route path="/trust/my_subscriptions" element={<MySubscriptionsPage />} />
               <Route path="/trust/my-subscriptions.php" element={<Navigate to="/trust/my-subscriptions" replace />} />
               <Route path="/trust/my_subscriptions.php" element={<Navigate to="/trust/my-subscriptions" replace />} />
+
               <Route path="/trust/new-password" element={<NewPasswordPage user={user} />} />
               <Route path="/trust/new_password" element={<NewPasswordPage user={user} />} />
               <Route path="/trust/new-password.php" element={<Navigate to="/trust/new-password" replace />} />
@@ -734,12 +771,14 @@ function AppContent() {
 
             </Route>
 
-            {/* Root and Fallback: Redirect based on user role */}
+            {/* Root and Fallback: Redirect based on active session */}
             <Route
               path="/"
               element={
-                user ? (
-                  user.role?.toLowerCase()?.includes('super') ? <Navigate to="/superadmin" replace /> : <Navigate to="/trust" replace />
+                trustUser ? (
+                  <Navigate to="/trust" replace />
+                ) : superAdminUser ? (
+                  <Navigate to="/superadmin" replace />
                 ) : (
                   <Navigate to="/trust/login" replace />
                 )
@@ -748,10 +787,10 @@ function AppContent() {
             <Route
               path="*"
               element={
-                user ? (
-                  user.role?.toLowerCase()?.includes('super') ? <Navigate to="/superadmin" replace /> : <Navigate to="/trust" replace />
+                isSuperAdminRoute ? (
+                  superAdminUser ? <Navigate to="/superadmin" replace /> : <Navigate to="/superadmin/login" replace />
                 ) : (
-                  location.pathname.toLowerCase().startsWith('/superadmin') ? <Navigate to="/superadmin/register" replace /> : <Navigate to="/trust/login" replace />
+                  trustUser ? <Navigate to="/trust" replace /> : <Navigate to="/trust/login" replace />
                 )
               }
             />

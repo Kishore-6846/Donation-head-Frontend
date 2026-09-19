@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SimplePopup from '../components/SimplePopup';
 import { Plus, Pencil, Trash2, Shield, Sparkles } from 'lucide-react';
+import { getCurrentUser, isSuperUser } from '../utils/authStorage';
 
 const DEFAULT_HEADS = [
   {
@@ -83,14 +84,9 @@ export default function DonationHeadsPage({ user }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const activeUser = user || (() => {
-    try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch(e) { return {}; }
-  })();
-  const isSuperAdmin =
-    location.pathname.toLowerCase().startsWith('/superadmin') ||
-    Boolean(activeUser?.role && activeUser.role.toLowerCase().includes('super')) ||
-    Boolean(activeUser?.isSuperAdmin);
-  const activeTrustName = activeUser?.trustName || activeUser?.name || '';
+  const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin');
+  const activeUser = (!isSuperAdmin && !isSuperUser(user) && user) || getCurrentUser(location.pathname) || {};
+  const activeTrustName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || (!isSuperUser(activeUser) ? activeUser?.name : '') || '';
 
   const [heads, setHeads] = useState(getInitialHeads);
   const [loading, setLoading] = useState(false);

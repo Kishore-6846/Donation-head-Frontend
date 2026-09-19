@@ -4,6 +4,7 @@ import Breadcrumb from '../components/Breadcrumb';
 import ReceiptModal from '../components/ReceiptModal';
 import UpgradePlanModal from '../components/UpgradePlanModal';
 import SimplePopup from '../components/SimplePopup';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 import {
   Plus,
   BookOpen,
@@ -60,7 +61,9 @@ export default function TrustDashboardPage({ user }) {
   // Plan / cart modal shown on demand
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
 
-  const isDefaultAdmin = !user?.email || user?.email === 'admin@donationreceipt.in';
+  const trustSession = getTrustSession();
+  const effectiveUser = (!isSuperUser(user) && user) || trustSession?.user || null;
+  const isDefaultAdmin = !effectiveUser?.email;
 
   // Show actual real counts for all receipts and vault certificates
   const [stats, setStats] = useState({
@@ -86,21 +89,17 @@ export default function TrustDashboardPage({ user }) {
     return () => window.removeEventListener('open-cart-modal', handleOpenCart);
   }, []);
 
-  const localUser = (() => {
-    try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch (e) { return {}; }
-  })();
-
   const [adminProfile, setAdminProfile] = useState(() => {
-    return { ...localUser, ...(user || {}) };
+    return effectiveUser || {};
   });
 
   useEffect(() => {
-    const activeEmail = (user?.email || localUser?.email || '').trim();
-    if (activeEmail) {
+    const activeEmail = (effectiveUser?.email || '').trim();
+    if (activeEmail && !isSuperUser({ email: activeEmail })) {
       fetch(`/api/users/${encodeURIComponent(activeEmail)}`)
         .then(r => r.json())
         .then(d => {
-          if (d.success && d.data) {
+          if (d.success && d.data && !isSuperUser(d.data)) {
             setAdminProfile(prev => ({ ...prev, ...d.data }));
           }
         })
@@ -109,8 +108,8 @@ export default function TrustDashboardPage({ user }) {
   }, [user]);
 
   useEffect(() => {
-    const effectiveEmail = (user?.email || localUser?.email || '').trim();
-    const effectiveTrustName = (user?.trustName || localUser?.trustName || (user?.name && !user.name.toLowerCase().includes('super') ? user.name : (localUser?.name && !localUser.name.toLowerCase().includes('super') ? localUser.name : '')) || '').trim();
+    const effectiveEmail = (effectiveUser?.email || '').trim();
+    const effectiveTrustName = (effectiveUser?.trustName || (effectiveUser?.name && !isSuperUser(effectiveUser) ? effectiveUser.name : '') || '').trim();
 
     let queryParams = '?status=Active&limit=1000';
     if (effectiveEmail) queryParams += `&trustEmail=${encodeURIComponent(effectiveEmail)}`;
@@ -151,7 +150,7 @@ export default function TrustDashboardPage({ user }) {
 
     // Sync vault count directly from user-specific certificates in localStorage
     try {
-      const certKey = isDefaultAdmin ? 'certificates_data' : `certificates_data_${user?.email}`;
+      const certKey = isDefaultAdmin ? 'certificates_data' : `certificates_data_${effectiveUser?.email}`;
       const savedCerts = localStorage.getItem(certKey);
       if (savedCerts) {
         const parsed = JSON.parse(savedCerts);
@@ -163,10 +162,8 @@ export default function TrustDashboardPage({ user }) {
       }
     } catch (e) {}
 
-    const activeUser = user || (() => {
-      try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch (e) { return {}; }
-    })();
-    const tName = activeUser?.trustName || (activeUser?.name && !activeUser.name.toLowerCase().includes('super') ? activeUser.name : '');
+    const activeUser = effectiveUser;
+    const tName = activeUser?.trustName || (activeUser?.name && !isSuperUser(activeUser) ? activeUser.name : '');
     const uEmail = activeUser?.email || '';
     const headsUrl = tName
       ? `/api/donation-heads?limit=100&trustName=${encodeURIComponent(tName)}&trustEmail=${encodeURIComponent(uEmail)}`
@@ -257,15 +254,15 @@ export default function TrustDashboardPage({ user }) {
   };
 
   const effectiveTrustName =
-    adminProfile.trustName ||
-    (adminProfile.name && !adminProfile.name.toLowerCase().includes('super') ? adminProfile.name : '') ||
+    (adminProfile.trustName && adminProfile.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? adminProfile.trustName : '') ||
+    (adminProfile.name && !isSuperUser(adminProfile) ? adminProfile.name : '') ||
     'Trust Organization';
 
-  const effectiveEmail = adminProfile.email || 'admin@trust.org';
+  const effectiveEmail = (!isSuperUser(adminProfile) ? adminProfile.email : '') || 'admin@trust.org';
   const effectiveMobile = adminProfile.mobile || adminProfile.phone || '';
   const effectiveRegNo = adminProfile.registrationNo || '';
   const effective80G = adminProfile.section80GRegNo || adminProfile.reg12ANo || '';
-  const effectiveContactPerson = adminProfile.contactPerson || (adminProfile.name && !adminProfile.name.toLowerCase().includes('super') ? adminProfile.name : '');
+  const effectiveContactPerson = adminProfile.contactPerson || (adminProfile.name && !isSuperUser(adminProfile) ? adminProfile.name : '');
   const effectiveStatus = adminProfile.status || 'Active';
   const effectivePlan = adminProfile.plan || 'Standard';
   const effectiveJoined = adminProfile.joinedDate || 'Recently';

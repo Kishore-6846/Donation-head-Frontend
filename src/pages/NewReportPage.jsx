@@ -26,7 +26,8 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
-  GripVertical
+  GripVertical,
+  Search
 } from 'lucide-react';
 
 // Master Catalog of all available fields that SuperAdmin can select
@@ -229,6 +230,22 @@ export default function NewReportPage() {
     minAmount: ''
   });
 
+  // Selected Filters that will be present in the new Report
+  const [enabledFilters, setEnabledFilters] = useState({
+    dateRange: true,
+    donationHead: true,
+    donationType: true,
+    paymentMode: true,
+    search: true
+  });
+
+  const toggleFilter = (filterKey) => {
+    setEnabledFilters(prev => ({
+      ...prev,
+      [filterKey]: !prev[filterKey]
+    }));
+  };
+
   // Ordered Columns State: SuperAdmin controls exact sequence (#1, #2, #3, ...)
   const [orderedColumns, setOrderedColumns] = useState(() => {
     return AVAILABLE_FIELDS_CATALOG
@@ -298,6 +315,9 @@ export default function NewReportPage() {
 
             if (rep.filters) {
               setFilterCriteria(prev => ({ ...prev, ...rep.filters }));
+            }
+            if (rep.enabledFilters) {
+              setEnabledFilters(prev => ({ ...prev, ...rep.enabledFilters }));
             }
 
             if (Array.isArray(rep.columns) && rep.columns.length > 0) {
@@ -576,6 +596,7 @@ export default function NewReportPage() {
           reportBase === 'payment-mode' ? 'Payment Mode Summary' :
           reportBase === '10bd' ? 'Form 10BD Statutory Tax' : 'Custom Matrix',
         filters: filterCriteria,
+        enabledFilters: enabledFilters,
         selectedFieldKeys: orderedColumns.map(c => c.key),
         columns: orderedColumns.map(c => ({
           key: c.key,
@@ -751,67 +772,18 @@ export default function NewReportPage() {
           <form onSubmit={handleSubmit}>
 
             {/* ========================================================= */}
-            {/* 1. REPORT BASE & PRIMARY FOCUS */}
+            {/* 1. CREATE NEW REPORT */}
             {/* ========================================================= */}
             <div style={{ marginBottom: '32px' }}>
               <div className="form-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <Database size={20} color="#059669" />
+                <FileSpreadsheet size={20} color="#059669" />
                 <h2 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
-                  1. Report Base &amp; Primary Focus
+                  {editId ? '1. Edit Report Configuration' : '1. Create New Report'}
                 </h2>
               </div>
-              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-10px', marginBottom: '16px' }}>
-                Decide what underlying data entity this report is primarily built upon.
+              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-10px', marginBottom: '18px' }}>
+                Define report identification, target audience, financial period, and publishing scope.
               </p>
-
-              {/* Interactive Report Base Selection Grid */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                gap: '12px',
-                marginBottom: '24px'
-              }}>
-                {[
-                  { id: 'receipts', label: 'Receipts & Transactions', desc: 'All transaction line items', icon: FileSpreadsheet },
-                  { id: 'donation-head', label: 'Donation Head Wise', desc: 'Seva schemes & collections', icon: Layers },
-                  { id: 'donor', label: 'Donor Directory', desc: 'Donor profiles & cumulative totals', icon: Building },
-                  { id: 'donation-type', label: 'Donation Type Matrix', desc: 'Voluntary vs Corpus funds', icon: Tag },
-                  { id: 'payment-mode', label: 'Payment Mode Summary', desc: 'UPI, Netbanking, Cash breakdown', icon: DollarSign },
-                  { id: '10bd', label: 'Form 10BD Statutory', desc: 'Statutory compliance & 80G tax', icon: ShieldCheck },
-                  { id: 'custom', label: 'Custom Freeform Matrix', desc: 'SuperAdmin manual data matrix', icon: Sliders }
-                ].map(base => {
-                  const IconComp = base.icon;
-                  const isSelected = reportBase === base.id;
-                  return (
-                    <div
-                      key={base.id}
-                      onClick={() => setReportBase(base.id)}
-                      style={{
-                        padding: '14px 16px',
-                        borderRadius: '10px',
-                        border: isSelected ? '2px solid #059669' : '1px solid #cbd5e1',
-                        backgroundColor: isSelected ? '#f0fdf4' : '#ffffff',
-                        cursor: 'pointer',
-                        transition: 'all 0.18s ease',
-                        boxShadow: isSelected ? '0 4px 12px rgba(5, 150, 105, 0.12)' : 'none'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <IconComp size={18} color={isSelected ? '#059669' : '#64748b'} />
-                          <span style={{ fontSize: '13.5px', fontWeight: 700, color: isSelected ? '#065f46' : '#0f172a' }}>
-                            {base.label}
-                          </span>
-                        </div>
-                        {isSelected && <CheckCircle2 size={16} color="#059669" />}
-                      </div>
-                      <p style={{ fontSize: '12px', color: isSelected ? '#047857' : '#64748b', margin: 0, lineHeight: '1.4' }}>
-                        {base.desc}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
 
               {/* Core Metadata Fields */}
               <div className="trust-form-grid">
@@ -925,7 +897,7 @@ export default function NewReportPage() {
                     value={formData.status}
                     onChange={handleHeaderChange}
                   >
-                    <option value="Published">Published (Visible on Trust Admin Portals)</option>
+                    <option value="Published">Published (Visible on Every Trust Admin Portal)</option>
                     <option value="Draft">Draft (Internal Super Admin Only)</option>
                   </select>
                 </div>
@@ -945,96 +917,258 @@ export default function NewReportPage() {
             </div>
 
             {/* ========================================================= */}
-            {/* 2. SUPERADMIN FILTER RULES CONFIGURATION */}
+            {/* 2. SELECT FILTERS PRESENT IN THIS REPORT */}
             {/* ========================================================= */}
             <div style={{ marginTop: '32px', borderTop: '1px solid #e2e8f0', paddingTop: '28px', marginBottom: '32px' }}>
-              <div className="form-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <Filter size={20} color="#059669" />
-                <h2 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
-                  2. SuperAdmin Data Filter Rules
-                </h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <div className="form-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                  <Filter size={20} color="#059669" />
+                  <h2 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
+                    2. Select Filters for This Report
+                  </h2>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    backgroundColor: '#e6f4ea',
+                    color: '#047857'
+                  }}>
+                    {Object.values(enabledFilters).filter(Boolean).length} of 5 Filters Enabled
+                  </span>
+                </div>
               </div>
-              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-10px', marginBottom: '18px' }}>
-                Specify filter criteria SuperAdmin enforces for the records queried into this report.
+              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-8px', marginBottom: '18px' }}>
+                Select which interactive filter controls should be available to users in this report. You can also configure default presets for each enabled filter.
               </p>
 
-              <div className="trust-form-grid" style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div className="trust-form-group">
-                  <label className="trust-form-label">Filter by Donation Head</label>
-                  <select
-                    className="trust-form-input"
-                    value={filterCriteria.donationHead}
-                    onChange={e => handleFilterChange('donationHead', e.target.value)}
+              {/* Filter Selection Cards Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                gap: '14px',
+                marginBottom: '20px'
+              }}>
+
+                {/* 1. Date Range Filter */}
+                <div
+                  style={{
+                    padding: '16px',
+                    borderRadius: '10px',
+                    border: enabledFilters.dateRange ? '2px solid #059669' : '1px solid #cbd5e1',
+                    backgroundColor: enabledFilters.dateRange ? '#f0fdf4' : '#ffffff',
+                    transition: 'all 0.18s ease'
+                  }}
+                >
+                  <div
+                    onClick={() => toggleFilter('dateRange')}
+                    style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', cursor: 'pointer' }}
                   >
-                    <option value="All Heads">All Donation Heads</option>
-                    <option value="General Donation">General Donation</option>
-                    <option value="Annadhanam Scheme">Annadhanam Scheme</option>
-                    <option value="Temple Renovation / Corpus">Temple Renovation / Corpus</option>
-                    <option value="Special Archana & Puja">Special Archana &amp; Puja</option>
-                    <option value="365 Drive">365 Drive</option>
-                    <option value="Food Drive">Food Drive</option>
-                    {donationHeadsList.map(h => (
-                      <option key={h._id || h.name} value={h.name}>{h.name}</option>
-                    ))}
-                  </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Calendar size={18} color={enabledFilters.dateRange ? '#059669' : '#64748b'} />
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: enabledFilters.dateRange ? '#065f46' : '#0f172a' }}>
+                        Date Range Filter
+                      </span>
+                    </div>
+                    {enabledFilters.dateRange ? (
+                      <CheckCircle2 size={18} color="#059669" />
+                    ) : (
+                      <Square size={18} color="#94a3b8" />
+                    )}
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0 0 0', lineHeight: '1.4' }}>
+                    Allows viewers to filter records between custom issuance date ranges (From Date → To Date).
+                  </p>
                 </div>
 
-                <div className="trust-form-group">
-                  <label className="trust-form-label">Filter by Donation Type</label>
-                  <select
-                    className="trust-form-input"
-                    value={filterCriteria.donationType}
-                    onChange={e => handleFilterChange('donationType', e.target.value)}
+                {/* 2. Donation Head / Seva Filter */}
+                <div
+                  style={{
+                    padding: '16px',
+                    borderRadius: '10px',
+                    border: enabledFilters.donationHead ? '2px solid #059669' : '1px solid #cbd5e1',
+                    backgroundColor: enabledFilters.donationHead ? '#f0fdf4' : '#ffffff',
+                    transition: 'all 0.18s ease'
+                  }}
+                >
+                  <div
+                    onClick={() => toggleFilter('donationHead')}
+                    style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', cursor: 'pointer' }}
                   >
-                    <option value="All Types">All Donation Types</option>
-                    <option value="Voluntary Donation">Voluntary Donation</option>
-                    <option value="Corpus Fund">Corpus Fund</option>
-                    <option value="Earmarked Fund">Earmarked Fund</option>
-                    {receiptTypesList.map(t => (
-                      <option key={t._id || t.name} value={t.name}>{t.name}</option>
-                    ))}
-                  </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Layers size={18} color={enabledFilters.donationHead ? '#059669' : '#64748b'} />
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: enabledFilters.donationHead ? '#065f46' : '#0f172a' }}>
+                        Donation Head Filter
+                      </span>
+                    </div>
+                    {enabledFilters.donationHead ? (
+                      <CheckCircle2 size={18} color="#059669" />
+                    ) : (
+                      <Square size={18} color="#94a3b8" />
+                    )}
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0 10px 0', lineHeight: '1.4' }}>
+                    Allows viewers to filter records by Seva scheme, Annadhanam, Corpus, or custom heads.
+                  </p>
+                  {enabledFilters.donationHead && (
+                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #d1fae5' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: '#065f46', display: 'block', marginBottom: '4px' }}>
+                        Default Head Selection:
+                      </label>
+                      <select
+                        className="trust-form-input"
+                        style={{ padding: '6px 10px', fontSize: '12.5px', backgroundColor: '#ffffff' }}
+                        value={filterCriteria.donationHead}
+                        onChange={e => handleFilterChange('donationHead', e.target.value)}
+                      >
+                        <option value="All Heads">All Donation Heads</option>
+                        <option value="General Donation">General Donation</option>
+                        <option value="Annadhanam Scheme">Annadhanam Scheme</option>
+                        <option value="Temple Renovation / Corpus">Temple Renovation / Corpus</option>
+                        <option value="Special Archana & Puja">Special Archana &amp; Puja</option>
+                        {donationHeadsList.map(h => (
+                          <option key={h._id || h.name} value={h.name}>{h.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                <div className="trust-form-group">
-                  <label className="trust-form-label">Filter by Payment Mode</label>
-                  <select
-                    className="trust-form-input"
-                    value={filterCriteria.paymentMode}
-                    onChange={e => handleFilterChange('paymentMode', e.target.value)}
+                {/* 3. Donation Type Filter */}
+                <div
+                  style={{
+                    padding: '16px',
+                    borderRadius: '10px',
+                    border: enabledFilters.donationType ? '2px solid #059669' : '1px solid #cbd5e1',
+                    backgroundColor: enabledFilters.donationType ? '#f0fdf4' : '#ffffff',
+                    transition: 'all 0.18s ease'
+                  }}
+                >
+                  <div
+                    onClick={() => toggleFilter('donationType')}
+                    style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', cursor: 'pointer' }}
                   >
-                    <option value="All Modes">All Payment Modes</option>
-                    <option value="Wallet/UPI">Wallet / UPI</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Cheque/Draft">Cheque / Demand Draft</option>
-                    <option value="Electronic/Bank Transfer">Electronic / Bank Transfer</option>
-                  </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Tag size={18} color={enabledFilters.donationType ? '#059669' : '#64748b'} />
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: enabledFilters.donationType ? '#065f46' : '#0f172a' }}>
+                        Donation Type Filter
+                      </span>
+                    </div>
+                    {enabledFilters.donationType ? (
+                      <CheckCircle2 size={18} color="#059669" />
+                    ) : (
+                      <Square size={18} color="#94a3b8" />
+                    )}
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0 10px 0', lineHeight: '1.4' }}>
+                    Allows viewers to filter by Voluntary Donation, Corpus Fund, or Earmarked funds.
+                  </p>
+                  {enabledFilters.donationType && (
+                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #d1fae5' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: '#065f46', display: 'block', marginBottom: '4px' }}>
+                        Default Type Selection:
+                      </label>
+                      <select
+                        className="trust-form-input"
+                        style={{ padding: '6px 10px', fontSize: '12.5px', backgroundColor: '#ffffff' }}
+                        value={filterCriteria.donationType}
+                        onChange={e => handleFilterChange('donationType', e.target.value)}
+                      >
+                        <option value="All Types">All Donation Types</option>
+                        <option value="Voluntary Donation">Voluntary Donation</option>
+                        <option value="Corpus Fund">Corpus Fund</option>
+                        <option value="Earmarked Fund">Earmarked Fund</option>
+                        {receiptTypesList.map(t => (
+                          <option key={t._id || t.name} value={t.name}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                <div className="trust-form-group">
-                  <label className="trust-form-label">80G Tax Exemption Eligibility</label>
-                  <select
-                    className="trust-form-input"
-                    value={filterCriteria.section80G}
-                    onChange={e => handleFilterChange('section80G', e.target.value)}
+                {/* 4. Payment Mode Filter */}
+                <div
+                  style={{
+                    padding: '16px',
+                    borderRadius: '10px',
+                    border: enabledFilters.paymentMode ? '2px solid #059669' : '1px solid #cbd5e1',
+                    backgroundColor: enabledFilters.paymentMode ? '#f0fdf4' : '#ffffff',
+                    transition: 'all 0.18s ease'
+                  }}
+                >
+                  <div
+                    onClick={() => toggleFilter('paymentMode')}
+                    style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', cursor: 'pointer' }}
                   >
-                    <option value="all">All Receipts (80G &amp; Non-80G)</option>
-                    <option value="eligible">Only Section 80G Tax-Exempt Receipts</option>
-                    <option value="non_eligible">Only Non-80G Receipts</option>
-                  </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <DollarSign size={18} color={enabledFilters.paymentMode ? '#059669' : '#64748b'} />
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: enabledFilters.paymentMode ? '#065f46' : '#0f172a' }}>
+                        Payment Mode Filter
+                      </span>
+                    </div>
+                    {enabledFilters.paymentMode ? (
+                      <CheckCircle2 size={18} color="#059669" />
+                    ) : (
+                      <Square size={18} color="#94a3b8" />
+                    )}
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0 10px 0', lineHeight: '1.4' }}>
+                    Allows viewers to filter by UPI, Bank Transfer, Cheque, or Cash settlements.
+                  </p>
+                  {enabledFilters.paymentMode && (
+                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #d1fae5' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: '#065f46', display: 'block', marginBottom: '4px' }}>
+                        Default Mode Selection:
+                      </label>
+                      <select
+                        className="trust-form-input"
+                        style={{ padding: '6px 10px', fontSize: '12.5px', backgroundColor: '#ffffff' }}
+                        value={filterCriteria.paymentMode}
+                        onChange={e => handleFilterChange('paymentMode', e.target.value)}
+                      >
+                        <option value="All Modes">All Payment Modes</option>
+                        <option value="Wallet/UPI">Wallet / UPI</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Cheque/Draft">Cheque / Demand Draft</option>
+                        <option value="Electronic/Bank Transfer">Electronic / Bank Transfer</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                <div className="trust-form-group">
-                  <label className="trust-form-label">Minimum Amount Threshold (₹)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="e.g. 1000 (Optional)"
-                    className="trust-form-input"
-                    value={filterCriteria.minAmount}
-                    onChange={e => handleFilterChange('minAmount', e.target.value)}
-                  />
+                {/* 5. Keyword Search Bar */}
+                <div
+                  style={{
+                    padding: '16px',
+                    borderRadius: '10px',
+                    border: enabledFilters.search ? '2px solid #059669' : '1px solid #cbd5e1',
+                    backgroundColor: enabledFilters.search ? '#f0fdf4' : '#ffffff',
+                    transition: 'all 0.18s ease'
+                  }}
+                >
+                  <div
+                    onClick={() => toggleFilter('search')}
+                    style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', cursor: 'pointer' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Search size={18} color={enabledFilters.search ? '#059669' : '#64748b'} />
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: enabledFilters.search ? '#065f46' : '#0f172a' }}>
+                        Keyword Search Filter
+                      </span>
+                    </div>
+                    {enabledFilters.search ? (
+                      <CheckCircle2 size={18} color="#059669" />
+                    ) : (
+                      <Square size={18} color="#94a3b8" />
+                    )}
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0 0 0', lineHeight: '1.4' }}>
+                    Enables an instant search box on the report table for searching donor names, phone, PAN, and receipt numbers.
+                  </p>
                 </div>
+
               </div>
             </div>
 

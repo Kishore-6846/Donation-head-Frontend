@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { Sparkles, Users, Filter, RotateCcw, FileSpreadsheet, PlusCircle, Plus } from 'lucide-react';
+import { Sparkles, Users, Filter, RotateCcw, FileSpreadsheet } from 'lucide-react';
 
 export default function DonorReportPage({ user: propUser }) {
   const location = useLocation();
@@ -12,10 +12,29 @@ export default function DonorReportPage({ user: propUser }) {
   const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin') || currentUser?.role?.toLowerCase() === 'superadmin';
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [selectedTrust, setSelectedTrust] = useState('');
+  const [trustsList, setTrustsList] = useState([]);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetch('/api/users')
+        .then(res => res.json())
+        .then(data => {
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+          const names = list
+            .map(u => u.trustName || u.name)
+            .filter(Boolean);
+          const unique = Array.from(new Set(['Arulmigu Sivan Trust', ...names]));
+          setTrustsList(unique);
+        })
+        .catch(err => console.error('Error fetching trusts:', err));
+    }
+  }, [isSuperAdmin]);
 
   const [activeDateRange, setActiveDateRange] = useState({
     from: '',
-    to: ''
+    to: '',
+    trust: ''
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -28,27 +47,15 @@ export default function DonorReportPage({ user: propUser }) {
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
 
-  // Direct Entry State for adding donor records directly
-  const [showAddDirect, setShowAddDirect] = useState(false);
-  const [directForm, setDirectForm] = useState({
-    name: '',
-    phone: '',
-    panNumber: '',
-    aadhaarNumber: '',
-    address: '',
-    donationHead: 'General Donation',
-    amount: '',
-    paymentMode: 'Wallet/UPI'
-  });
-  const [addMessage, setAddMessage] = useState('');
-
-  const fetchDonorReport = async (fromD, toD) => {
+  const fetchDonorReport = async (fromD = fromDate, toD = toDate, trust = selectedTrust) => {
     setLoading(true);
     try {
       let url = `/api/reports/donor-report?`;
       if (fromD) url += `fromDate=${encodeURIComponent(fromD)}&`;
       if (toD) url += `toDate=${encodeURIComponent(toD)}&`;
-      if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
+      if (trust) {
+        url += `trustName=${encodeURIComponent(trust)}&`;
+      } else if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
         url += `trustEmail=${encodeURIComponent(currentUser?.email || '')}&trustName=${encodeURIComponent(currentUser?.trustName || currentUser?.name || '')}&trustId=${encodeURIComponent(currentUser?._id || '')}`;
       }
       const res = await fetch(url);
@@ -66,94 +73,19 @@ export default function DonorReportPage({ user: propUser }) {
   const handleReset = () => {
     setFromDate('');
     setToDate('');
+    setSelectedTrust('');
     setSearchTerm('');
     setCurrentPage(1);
     setIsSubmitted(false);
     setAllData([]);
   };
 
-  const handleAddDirect = async (e) => {
-    e.preventDefault();
-    if (!directForm.name || !directForm.amount) {
-      alert('Donor Name and Contribution Amount are required.');
-      return;
-    }
-
-    try {
-      const payload = {
-        donorName: directForm.name.trim(),
-        phone: directForm.phone.trim(),
-        panNo: directForm.panNumber.trim().toUpperCase(),
-        aadhaarNo: directForm.aadhaarNumber.trim(),
-        address: directForm.address.trim(),
-        donationHead: directForm.donationHead || 'General',
-        donationType: 'Voluntary Donation',
-        paymentMode: directForm.paymentMode || 'Online / UPI',
-        amount: parseFloat(directForm.amount) || 0,
-        receiptDate: new Date().toISOString().split('T')[0],
-        notes: 'Donor record added directly to Directory',
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      const res = await fetch('/api/receipts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-      const saved = json.success ? json.data : null;
-
-      const newEntry = {
-        _id: saved?._id || ('dnr_' + Date.now()),
-        name: directForm.name,
-        phone: directForm.phone,
-        panNumber: directForm.panNumber,
-        aadhaarNumber: directForm.aadhaarNumber,
-        address: directForm.address,
-        donationHead: directForm.donationHead,
-        donationType: 'Voluntary Donation',
-        paymentMode: directForm.paymentMode,
-        totalAmount: parseFloat(directForm.amount) || 0,
-        receiptCount: 1,
-        lastDonationDate: new Date().toLocaleDateString('en-GB'),
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      setAllData(prev => [newEntry, ...prev]);
-      setIsSubmitted(true);
-      setAddMessage(`Successfully added ${directForm.name} (Total ₹${directForm.amount}) to Donor Directory! Auto-synced to Admin Panel.`);
-      setTimeout(() => setAddMessage(''), 6000);
-      setDirectForm({
-        name: '',
-        phone: '',
-        panNumber: '',
-        aadhaarNumber: '',
-        address: '',
-        donationHead: 'General Donation',
-        amount: '',
-        paymentMode: 'Wallet/UPI'
-      });
-
-      // Refetch live report from backend
-      fetchDonorReport(fromDate, toDate);
-    } catch (err) {
-      console.error('Error saving directly to receipts API:', err);
-      alert('Failed to save to server: ' + err.message);
-    }
-  };
-
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
     setIsSubmitted(true);
-    setActiveDateRange({ from: fromDate, to: toDate });
+    setActiveDateRange({ from: fromDate, to: toDate, trust: selectedTrust });
     setCurrentPage(1);
-    fetchDonorReport(fromDate, toDate);
+    fetchDonorReport(fromDate, toDate, selectedTrust);
   };
 
   // Filter and Sort
@@ -169,7 +101,8 @@ export default function DonorReportPage({ user: propUser }) {
         (item.email && item.email.toLowerCase().includes(term)) ||
         (item.address && item.address.toLowerCase().includes(term)) ||
         (item.panNumber && item.panNumber.toLowerCase().includes(term)) ||
-        (item.aadhaarNumber && item.aadhaarNumber.toLowerCase().includes(term))
+        (item.aadhaarNumber && item.aadhaarNumber.toLowerCase().includes(term)) ||
+        (item.trustName && item.trustName.toLowerCase().includes(term))
       );
     }
 
@@ -213,6 +146,7 @@ export default function DonorReportPage({ user: propUser }) {
     }
 
     const headers = [
+      'User / Trust',
       'Name',
       'Phone',
       'Email',
@@ -222,6 +156,7 @@ export default function DonorReportPage({ user: propUser }) {
     ];
 
     const rows = dataToExport.map((r) => [
+      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
       `"${r.name || ''}"`,
       `"${r.phone || ''}"`,
       `"${r.email || ''}"`,
@@ -366,20 +301,6 @@ export default function DonorReportPage({ user: propUser }) {
             Generate comprehensive donor contribution records and track lifetime donation statistics.
           </p>
         </div>
-        {isSuperAdmin && (
-          <div className="mint-hero-right">
-            <button
-              type="button"
-              className="btn-trust-primary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '15px' }}
-              onClick={() => setShowAddDirect(!showAddDirect)}
-              title="Add new donor profile directly to this directory"
-            >
-              <PlusCircle size={18} strokeWidth={2.5} />
-              <span>{showAddDirect ? 'Close Direct Form' : '+ Add Donor Directly'}</span>
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="mint-table-card-container">
@@ -392,20 +313,41 @@ export default function DonorReportPage({ user: propUser }) {
             </div>
             {isSubmitted && (
               <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-                Period: <strong>{activeDateRange.from}</strong> to <strong>{activeDateRange.to}</strong>
+                {activeDateRange.from || activeDateRange.to
+                  ? <>Period: <strong>{activeDateRange.from || 'Start'}</strong> to <strong>{activeDateRange.to || 'Present'}</strong></>
+                  : <strong>All Dates</strong>}
+                {activeDateRange.trust && <> | Trust: <strong>{activeDateRange.trust}</strong></>}
               </span>
             )}
           </div>
 
           <form onSubmit={handleSubmit} className="report-filter-grid">
+            {isSuperAdmin && (
+              <div className="report-field-group">
+                <label htmlFor="donorTrustSelect" className="report-field-label">
+                  User / Trust
+                </label>
+                <select
+                  id="donorTrustSelect"
+                  value={selectedTrust}
+                  onChange={(e) => setSelectedTrust(e.target.value)}
+                  className="report-field-input"
+                >
+                  <option value="">All Trusts / Users</option>
+                  {trustsList.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="report-field-group">
               <label htmlFor="donorFromDate" className="report-field-label">
-                From Date
+                From Date (Optional)
               </label>
               <input
                 id="donorFromDate"
                 type="date"
-                required
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
                 className="report-field-input"
@@ -414,12 +356,11 @@ export default function DonorReportPage({ user: propUser }) {
 
             <div className="report-field-group">
               <label htmlFor="donorToDate" className="report-field-label">
-                To Date
+                To Date (Optional)
               </label>
               <input
                 id="donorToDate"
                 type="date"
-                required
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
                 className="report-field-input"
@@ -436,7 +377,7 @@ export default function DonorReportPage({ user: propUser }) {
                 type="button"
                 className="report-btn-secondary"
                 onClick={handleReset}
-                title="Reset date filters"
+                title="Reset filters"
               >
                 <RotateCcw size={15} />
                 <span>Reset</span>
@@ -455,135 +396,11 @@ export default function DonorReportPage({ user: propUser }) {
           </form>
         </div>
 
-        {/* Inline Direct Entry Panel */}
-        {isSuperAdmin && showAddDirect && (
-          <div className="report-direct-add-panel">
-            <div className="report-direct-add-header">
-              <div className="report-direct-add-title">
-                <PlusCircle size={18} />
-                <span>Add Donor Profile Directly to Directory</span>
-              </div>
-              <span style={{ fontSize: '12.5px', color: '#047857', fontWeight: 500 }}>
-                Directly registers a donor contribution profile into this report
-              </span>
-            </div>
-
-            <form onSubmit={handleAddDirect}>
-              <div className="report-direct-add-grid">
-                <div className="report-field-group">
-                  <label className="report-field-label">Donor Full Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Muruganathan P"
-                    className="report-field-input"
-                    value={directForm.name}
-                    onChange={e => setDirectForm({ ...directForm, name: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Contribution Amount (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="e.g. 10000"
-                    className="report-field-input"
-                    value={directForm.amount}
-                    onChange={e => setDirectForm({ ...directForm, amount: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Phone Number</label>
-                  <input
-                    type="tel"
-                    placeholder="e.g. 9840123456"
-                    className="report-field-input"
-                    value={directForm.phone}
-                    onChange={e => setDirectForm({ ...directForm, phone: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Donation Head</label>
-                  <select
-                    className="report-field-select"
-                    value={directForm.donationHead}
-                    onChange={e => setDirectForm({ ...directForm, donationHead: e.target.value })}
-                  >
-                    <option value="General Donation">General Donation</option>
-                    <option value="Annadhanam Scheme">Annadhanam Scheme</option>
-                    <option value="Food Drive">Food Drive</option>
-                    <option value="365 Drive">365 Drive</option>
-                    <option value="Temple Corpus">Temple Corpus</option>
-                  </select>
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">PAN Number</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. ABCDE1234F"
-                    className="report-field-input"
-                    style={{ textTransform: 'uppercase' }}
-                    value={directForm.panNumber}
-                    onChange={e => setDirectForm({ ...directForm, panNumber: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Aadhaar Number</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 1234 5678 9012"
-                    className="report-field-input"
-                    value={directForm.aadhaarNumber}
-                    onChange={e => setDirectForm({ ...directForm, aadhaarNumber: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="report-field-label">Donor Address</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 21, North Car Street, Chidambaram, Tamil Nadu"
-                    className="report-field-input"
-                    value={directForm.address}
-                    onChange={e => setDirectForm({ ...directForm, address: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-filter-actions" style={{ marginTop: '6px' }}>
-                  <button type="submit" className="report-btn-submit">
-                    <Plus size={15} />
-                    <span>Save to Donor Directory</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="report-btn-secondary"
-                    onClick={() => setShowAddDirect(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {addMessage && (
-          <div style={{ padding: '12px 18px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px', border: '1px solid #86efac', marginBottom: '16px', fontSize: '13.5px', fontWeight: 600 }}>
-            ✓ {addMessage}
-          </div>
-        )}
-
         {/* Dynamic Report Subtitle matching Screenshot 4 & 5 */}
         <div style={{ fontSize: '14px', fontWeight: '700', color: '#212529', marginBottom: '14px' }}>
           {!isSubmitted
             ? 'Reports: -'
-            : `Reports:${activeDateRange.from} - ${activeDateRange.to}`}
+            : `Reports: ${activeDateRange.from || 'All'} - ${activeDateRange.to || 'All'}${activeDateRange.trust ? ` (${activeDateRange.trust})` : ''}`}
         </div>
 
         {/* DataTables Controls: Show entries & Search */}
@@ -656,9 +473,12 @@ export default function DonorReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: '1200px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
+                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                  User / Trust {renderSortIndicator('trustName')}
+                </th>
                 <th style={{ ...thStyle, width: '220px' }} onClick={() => handleSort('name')}>
                   Name {renderSortIndicator('name')}
                 </th>
@@ -683,7 +503,7 @@ export default function DonorReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -699,7 +519,7 @@ export default function DonorReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -715,7 +535,7 @@ export default function DonorReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -731,6 +551,7 @@ export default function DonorReportPage({ user: propUser }) {
               ) : (
                 paginatedData.map((row, idx) => (
                   <tr key={idx}>
+                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>
                     <td style={tdStyle}>{row.phone || ''}</td>
                     <td style={tdStyle}>{row.email || ''}</td>

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import navLogo from '../assets/Receipt-Nav-Logo.png';
 import { Lock, FileText, CheckCircle2, AlertCircle, Upload, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
+import { setTrustSession } from '../utils/authStorage';
 
 const INDIAN_STATES = [
   'Andaman Nicobar',
@@ -45,6 +46,7 @@ const INDIAN_STATES = [
 export default function RegisterPage({ onLoginSuccess }) {
   const navigate = useNavigate();
 
+  const [plans, setPlans] = useState([]);
   const [formData, setFormData] = useState({
     trustName: '',
     email: '',
@@ -52,6 +54,7 @@ export default function RegisterPage({ onLoginSuccess }) {
     mobile: '',
     address: '',
     state: '',
+    plan: 'Standard',
     registrationNo: '',
     panNo: '',
     website: '',
@@ -67,6 +70,36 @@ export default function RegisterPage({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Dynamically load active plans from SuperAdmin plans API
+  useEffect(() => {
+    fetch('/api/plans?status=Active')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.data) && d.data.length > 0) {
+          setPlans(d.data);
+          setFormData(prev => ({
+            ...prev,
+            plan: prev.plan || d.data[0].name
+          }));
+        } else {
+          // Fallback to all plans if no Active query match
+          fetch('/api/plans')
+            .then(r2 => r2.json())
+            .then(d2 => {
+              if (d2.success && Array.isArray(d2.data) && d2.data.length > 0) {
+                setPlans(d2.data);
+                setFormData(prev => ({
+                  ...prev,
+                  plan: prev.plan || d2.data[0].name
+                }));
+              }
+            })
+            .catch(err2 => console.error('Error fetching fallback plans:', err2));
+        }
+      })
+      .catch(err => console.error('Error fetching plans in register page:', err));
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -156,7 +189,8 @@ export default function RegisterPage({ onLoginSuccess }) {
         fcraNo: '',
         receiptPrefix: `${rawPrefix}/2026-27/`,
         receiptStartNumber: '1',
-        receiptWatermarkText: rawPrefix
+        receiptWatermarkText: rawPrefix,
+        plan: formData.plan || 'Standard'
       };
 
       if (data.success) {
@@ -167,12 +201,7 @@ export default function RegisterPage({ onLoginSuccess }) {
           trustName: formData.trustName
         };
 
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user_info', JSON.stringify(fullUser));
-        localStorage.removeItem('profile_data');
-        if (formData.email) {
-          localStorage.setItem(`profile_data_${formData.email.toLowerCase()}`, JSON.stringify(registeredProfile));
-        }
+        setTrustSession(fullUser, data.token);
 
         if (onLoginSuccess) {
           onLoginSuccess(fullUser);
@@ -479,6 +508,50 @@ export default function RegisterPage({ onLoginSuccess }) {
                     </select>
                   </div>
 
+                  {/* Select Subscription Plan * (Dynamic from SuperAdmin Plans) */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
+                      Select Subscription Plan <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <select
+                      name="plan"
+                      required
+                      value={formData.plan}
+                      onChange={handleChange}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: '#065f46',
+                        border: '1.5px solid #00a651',
+                        borderRadius: '4px',
+                        outline: 'none',
+                        backgroundColor: '#f0fdf4',
+                        fontFamily: 'inherit',
+                        boxSizing: 'border-box',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {plans && plans.length > 0 ? (
+                        plans.map(p => (
+                          <option key={p._id || p.name} value={p.name}>
+                            ⭐ {p.name} Plan — ₹{Number(p.price).toLocaleString('en-IN')}/{p.billingCycle || 'Year'} ({p.staffUserLimit || 'Staff Access'})
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="Standard">⭐ Standard Plan — ₹4,000/Annual (4 Staff Users)</option>
+                          <option value="Advanced">⭐ Advanced Plan — ₹7,000/Annual (9 Staff Users)</option>
+                          <option value="Enterprise">⭐ Enterprise Plan — ₹10,000/Annual (20 Staff Users)</option>
+                        </>
+                      )}
+                    </select>
+                    {/* <p style={{ fontSize: '11.5px', color: '#64748b', margin: '4px 0 0 0' }}>
+                      Includes 48-Hour Free Trial access to your selected plan features.
+                    </p> */}
+                  </div>
+
                   {/* Trust/NGO Registration Number */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
@@ -530,7 +603,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                   </div>
 
                   {/* Website */}
-                  <div>
+                  {/* <div>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
                       Website
                     </label>
@@ -551,7 +624,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                         boxSizing: 'border-box'
                       }}
                     />
-                  </div>
+                  </div> */}
 
                   {/* Contact Person * */}
                   <div>

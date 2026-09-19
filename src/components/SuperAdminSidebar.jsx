@@ -34,16 +34,22 @@ export default function SuperAdminSidebar({ isOpen, onClose, user, onLogout }) {
   const [welcomeExpanded, setWelcomeExpanded] = useState(isWelcomeRoute);
   const [dynamicReports, setDynamicReports] = useState([]);
 
-  React.useEffect(() => {
+  const fetchSidebarReports = () => {
     fetch('/api/dynamic-reports?status=Published')
       .then(r => r.json())
       .then(d => {
         if (d.success && Array.isArray(d.data)) {
-          setDynamicReports(d.data);
+          const standardCodes = ['REP-RCPT-MASTER', 'REP-10BD-STATUTORY', 'REP-HEAD-COLLECTION', 'REP-DONOR-DIRECTORY', 'REP-TYPE-MATRIX', 'REP-PAYMENT-RECON', 'REP-EXEC-INTELLIGENCE'];
+          const customOnly = d.data.filter(r => !r.isStandard && !standardCodes.includes(r.code) && !r._id?.startsWith('std_'));
+          setDynamicReports(customOnly);
         }
       })
       .catch(e => console.error('Error fetching dynamic reports in sidebar:', e));
-  }, [path]);
+  };
+
+  React.useEffect(() => {
+    fetchSidebarReports();
+  }, [path, reportsExpanded]);
 
   const isDashboard =
     normalizedPath === '/superadmin' ||
@@ -205,6 +211,21 @@ export default function SuperAdminSidebar({ isOpen, onClose, user, onLogout }) {
 
               {reportsExpanded && (
                 <ul className="sidebar-submenu">
+                  {dynamicReports.map(dr => (
+                    <li key={dr._id}>
+                      <Link
+                        to={`/superadmin/report/${dr._id}`}
+                        className={`sidebar-sublink ${path.includes(dr._id) ? 'active' : ''}`}
+                        onClick={handleLinkClick}
+                        title={dr.title}
+                      >
+                        <span className="sublink-dot" style={{ backgroundColor: '#059669' }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {dr.title}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
                   <li>
                     <Link
                       to="/superadmin/reports-it"

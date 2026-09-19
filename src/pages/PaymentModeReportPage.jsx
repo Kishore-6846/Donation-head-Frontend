@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
-import { Sparkles, CreditCard, Filter, RotateCcw, FileSpreadsheet, PlusCircle, Plus } from 'lucide-react';
+import { Sparkles, CreditCard, Filter, RotateCcw, FileSpreadsheet } from 'lucide-react';
 
 export default function PaymentModeReportPage({ user: propUser }) {
   const location = useLocation();
@@ -13,11 +13,30 @@ export default function PaymentModeReportPage({ user: propUser }) {
   const [paymentMode, setPaymentMode] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [selectedTrust, setSelectedTrust] = useState('');
+  const [trustsList, setTrustsList] = useState([]);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetch('/api/users')
+        .then(res => res.json())
+        .then(data => {
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+          const names = list
+            .map(u => u.trustName || u.name)
+            .filter(Boolean);
+          const unique = Array.from(new Set(['Arulmigu Sivan Trust', ...names]));
+          setTrustsList(unique);
+        })
+        .catch(err => console.error('Error fetching trusts:', err));
+    }
+  }, [isSuperAdmin]);
 
   const [activeFilter, setActiveFilter] = useState({
     mode: '',
     from: '',
-    to: ''
+    to: '',
+    trust: ''
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -30,27 +49,17 @@ export default function PaymentModeReportPage({ user: propUser }) {
   const [sortField, setSortField] = useState('receiptNo');
   const [sortDirection, setSortDirection] = useState('asc');
 
-  // Direct Entry State for adding payment mode records directly
-  const [showAddDirect, setShowAddDirect] = useState(false);
-  const [directForm, setDirectForm] = useState({
-    receiptNo: '',
-    name: '',
-    paymentMode: '',
-    donationHead: 'General Donation',
-    amount: '',
-    date: new Date().toISOString().split('T')[0],
-    reference: ''
-  });
-  const [addMessage, setAddMessage] = useState('');
-
-  const fetchModeReport = async (mode, fromD, toD) => {
+  const fetchModeReport = async (mode = paymentMode, fromD = fromDate, toD = toDate, trust = selectedTrust) => {
     setLoading(true);
     try {
-      let url = `/api/reports/payment-mode-report?paymentMode=${encodeURIComponent(mode || 'Wallet/UPI')}`;
-      if (fromD) url += `&fromDate=${encodeURIComponent(fromD)}`;
-      if (toD) url += `&toDate=${encodeURIComponent(toD)}`;
-      if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
-        url += `&trustEmail=${encodeURIComponent(currentUser?.email || '')}&trustName=${encodeURIComponent(currentUser?.trustName || currentUser?.name || '')}&trustId=${encodeURIComponent(currentUser?._id || '')}`;
+      let url = `/api/reports/payment-mode-report?`;
+      if (mode) url += `paymentMode=${encodeURIComponent(mode)}&`;
+      if (fromD) url += `fromDate=${encodeURIComponent(fromD)}&`;
+      if (toD) url += `toDate=${encodeURIComponent(toD)}&`;
+      if (trust) {
+        url += `trustName=${encodeURIComponent(trust)}&`;
+      } else if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
+        url += `trustEmail=${encodeURIComponent(currentUser?.email || '')}&trustName=${encodeURIComponent(currentUser?.trustName || currentUser?.name || '')}&trustId=${encodeURIComponent(currentUser?._id || '')}`;
       }
       const res = await fetch(url);
       const data = await res.json();
@@ -68,91 +77,19 @@ export default function PaymentModeReportPage({ user: propUser }) {
     setPaymentMode('');
     setFromDate('');
     setToDate('');
+    setSelectedTrust('');
     setSearchTerm('');
     setCurrentPage(1);
     setIsSubmitted(false);
     setAllData([]);
   };
 
-  const handleAddDirect = async (e) => {
-    e.preventDefault();
-    if (!directForm.name || !directForm.amount) {
-      alert('Donor Name and Amount are required.');
-      return;
-    }
-    const chosenMode = directForm.paymentMode || paymentMode || 'Wallet/UPI';
-
-    try {
-      const payload = {
-        receiptNo: directForm.receiptNo.trim() || undefined,
-        donorName: directForm.name.trim(),
-        donationHead: directForm.donationHead || 'General',
-        paymentMode: chosenMode,
-        amount: parseFloat(directForm.amount) || 0,
-        receiptDate: directForm.date || new Date().toISOString().split('T')[0],
-        reference: directForm.reference.trim() || ('UPI-REF-' + Date.now().toString().slice(-6)),
-        notes: `Payment Mode Entry: ${chosenMode}`,
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      const res = await fetch('/api/receipts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-      const saved = json.success ? json.data : null;
-
-      const autoRcpt = saved?.receiptNo || directForm.receiptNo.trim() || `ASUF/2026-27/${Date.now().toString().slice(-4)}`;
-      const newEntry = {
-        _id: saved?._id || ('pmr_' + Date.now()),
-        receiptNo: autoRcpt,
-        name: directForm.name,
-        panNumber: '',
-        aadhaarNumber: '',
-        donationHead: directForm.donationHead,
-        paymentMode: chosenMode,
-        amount: parseFloat(directForm.amount) || 0,
-        donationDate: directForm.date,
-        reference: directForm.reference || saved?.reference || ('UPI-REF-' + Date.now().toString().slice(-6)),
-        createdBy: currentUser?.name || (isSuperAdmin ? 'Super Admin' : 'Admin'),
-        trustEmail: currentUser?.email || '',
-        trustName: currentUser?.trustName || currentUser?.name || '',
-        trustId: currentUser?._id || ''
-      };
-
-      setAllData(prev => [newEntry, ...prev]);
-      setIsSubmitted(true);
-      setActiveFilter(prev => ({ ...prev, mode: chosenMode, from: directForm.date, to: directForm.date }));
-      setAddMessage(`Successfully added ${directForm.name} via "${chosenMode}" (₹${directForm.amount}) directly! Auto-synced to Admin Panel.`);
-      setTimeout(() => setAddMessage(''), 6000);
-      setDirectForm({
-        receiptNo: '',
-        name: '',
-        paymentMode: '',
-        donationHead: 'General Donation',
-        amount: '',
-        date: new Date().toISOString().split('T')[0],
-        reference: ''
-      });
-
-      // Refetch live report from backend
-      fetchModeReport(chosenMode, fromDate, toDate);
-    } catch (err) {
-      console.error('Error saving directly to receipts API:', err);
-      alert('Failed to save to server: ' + err.message);
-    }
-  };
-
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
     setIsSubmitted(true);
-    setActiveFilter({ mode: paymentMode, from: fromDate, to: toDate });
+    setActiveFilter({ mode: paymentMode, from: fromDate, to: toDate, trust: selectedTrust });
     setCurrentPage(1);
-    fetchModeReport(paymentMode, fromDate, toDate);
+    fetchModeReport(paymentMode, fromDate, toDate, selectedTrust);
   };
 
   // Filter and Sort
@@ -172,7 +109,8 @@ export default function PaymentModeReportPage({ user: propUser }) {
         (item.address && item.address.toLowerCase().includes(term)) ||
         (item.paymentMode && item.paymentMode.toLowerCase().includes(term)) ||
         (item.amount && item.amount.toString().includes(term)) ||
-        (item.reference && item.reference.toLowerCase().includes(term))
+        (item.reference && item.reference.toLowerCase().includes(term)) ||
+        (item.trustName && item.trustName.toLowerCase().includes(term))
       );
     }
 
@@ -230,6 +168,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
     }
 
     const headers = [
+      'User / Trust',
       'Receipt No.',
       'Name',
       'Pan Number',
@@ -243,6 +182,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
     ];
 
     const rows = dataToExport.map((r) => [
+      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
       `"${r.receiptNo || ''}"`,
       `"${r.name || ''}"`,
       `"${r.panNumber || ''}"`,
@@ -391,20 +331,6 @@ export default function PaymentModeReportPage({ user: propUser }) {
             Audit and reconcile donation proceeds partitioned by payment channels, gateways, and bank modes.
           </p>
         </div>
-        {isSuperAdmin && (
-          <div className="mint-hero-right">
-            <button
-              type="button"
-              className="btn-trust-primary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '15px' }}
-              onClick={() => setShowAddDirect(!showAddDirect)}
-              title="Add new payment mode record directly"
-            >
-              <PlusCircle size={18} strokeWidth={2.5} />
-              <span>{showAddDirect ? 'Close Direct Form' : '+ Add Payment Entry Directly'}</span>
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="mint-table-card-container">
@@ -422,24 +348,43 @@ export default function PaymentModeReportPage({ user: propUser }) {
             </div>
             {isSubmitted && (
               <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-                Mode: <strong>{activeFilter.mode || 'All Modes'}</strong> | Period: <strong>{activeFilter.from}</strong> to <strong>{activeFilter.to}</strong>
+                Mode: <strong>{activeFilter.mode || 'All Modes'}</strong> | Period: {activeFilter.from || activeFilter.to ? <><strong>{activeFilter.from || 'Start'}</strong> to <strong>{activeFilter.to || 'Present'}</strong></> : <strong>All Dates</strong>}
+                {activeFilter.trust && <> | Trust: <strong>{activeFilter.trust}</strong></>}
               </span>
             )}
           </div>
 
           <form onSubmit={handleSubmit} className="report-filter-grid">
+            {isSuperAdmin && (
+              <div className="report-field-group">
+                <label htmlFor="modeTrustSelect" className="report-field-label">
+                  User / Trust
+                </label>
+                <select
+                  id="modeTrustSelect"
+                  value={selectedTrust}
+                  onChange={(e) => setSelectedTrust(e.target.value)}
+                  className="report-field-input"
+                >
+                  <option value="">All Trusts / Users</option>
+                  {trustsList.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="report-field-group">
               <label htmlFor="modeSelect" className="report-field-label">
-                Payment Mode
+                Payment Mode (Optional)
               </label>
               <select
                 id="modeSelect"
                 value={paymentMode}
                 onChange={(e) => setPaymentMode(e.target.value)}
-                required
                 className="report-field-select"
               >
-                <option value="">-- Select Payment Mode --</option>
+                <option value="">All Payment Modes</option>
                 <option value="Wallet/UPI">Wallet/UPI</option>
                 <option value="Cash">Cash</option>
                 <option value="Cheque/Draft">Cheque/Draft</option>
@@ -449,12 +394,11 @@ export default function PaymentModeReportPage({ user: propUser }) {
 
             <div className="report-field-group">
               <label htmlFor="modeFromDate" className="report-field-label">
-                From Date
+                From Date (Optional)
               </label>
               <input
                 id="modeFromDate"
                 type="date"
-                required
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
                 className="report-field-input"
@@ -463,12 +407,11 @@ export default function PaymentModeReportPage({ user: propUser }) {
 
             <div className="report-field-group">
               <label htmlFor="modeToDate" className="report-field-label">
-                To Date
+                To Date (Optional)
               </label>
               <input
                 id="modeToDate"
                 type="date"
-                required
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
                 className="report-field-input"
@@ -504,133 +447,11 @@ export default function PaymentModeReportPage({ user: propUser }) {
           </form>
         </div>
 
-        {/* Inline Direct Entry Panel */}
-        {isSuperAdmin && showAddDirect && (
-          <div className="report-direct-add-panel">
-            <div className="report-direct-add-header">
-              <div className="report-direct-add-title">
-                <PlusCircle size={18} />
-                <span>Add Payment Mode Record Directly</span>
-              </div>
-              <span style={{ fontSize: '12.5px', color: '#047857', fontWeight: 500 }}>
-                Directly inserts a collection entry into this payment method report
-              </span>
-            </div>
-
-            <form onSubmit={handleAddDirect}>
-              <div className="report-direct-add-grid">
-                <div className="report-field-group">
-                  <label className="report-field-label">Donor Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Senthil Kumar P"
-                    className="report-field-input"
-                    value={directForm.name}
-                    onChange={e => setDirectForm({ ...directForm, name: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Payment Mode</label>
-                  <select
-                    className="report-field-select"
-                    value={directForm.paymentMode || paymentMode}
-                    onChange={e => setDirectForm({ ...directForm, paymentMode: e.target.value })}
-                  >
-                    <option value="">-- Choose Mode --</option>
-                    <option value="Wallet/UPI">Wallet / UPI</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Cheque/Draft">Cheque / Demand Draft</option>
-                    <option value="Electronic/Bank Transfer">Electronic / Bank Transfer</option>
-                  </select>
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Amount (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="e.g. 2500"
-                    className="report-field-input"
-                    value={directForm.amount}
-                    onChange={e => setDirectForm({ ...directForm, amount: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Donation Head</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. General Donation"
-                    className="report-field-input"
-                    value={directForm.donationHead}
-                    onChange={e => setDirectForm({ ...directForm, donationHead: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Payment Date</label>
-                  <input
-                    type="date"
-                    className="report-field-input"
-                    value={directForm.date}
-                    onChange={e => setDirectForm({ ...directForm, date: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group">
-                  <label className="report-field-label">Reference / UTR No.</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. UPI/1234567890/SBIN"
-                    className="report-field-input"
-                    value={directForm.reference}
-                    onChange={e => setDirectForm({ ...directForm, reference: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-field-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="report-field-label">Receipt No. (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="Auto-generated if blank"
-                    className="report-field-input"
-                    value={directForm.receiptNo}
-                    onChange={e => setDirectForm({ ...directForm, receiptNo: e.target.value })}
-                  />
-                </div>
-
-                <div className="report-filter-actions" style={{ marginTop: '6px' }}>
-                  <button type="submit" className="report-btn-submit">
-                    <Plus size={15} />
-                    <span>Save to Payment Report</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="report-btn-secondary"
-                    onClick={() => setShowAddDirect(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {addMessage && (
-          <div style={{ padding: '12px 18px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px', border: '1px solid #86efac', marginBottom: '16px', fontSize: '13.5px', fontWeight: 600 }}>
-            ✓ {addMessage}
-          </div>
-        )}
-
         {/* Dynamic Report Subtitle matching Screenshot 3 & 4 */}
         <div style={{ fontSize: '14px', fontWeight: '700', color: '#212529', marginBottom: '14px' }}>
           {!isSubmitted
-            ? 'Report for "" Date: -'
-            : `Report for "${activeFilter.mode || 'Wallet/UPI'}" Date: ${activeFilter.from} - ${activeFilter.to}`}
+            ? 'Reports: -'
+            : `Report for "${activeFilter.mode || 'All Payment Modes'}" Date: ${activeFilter.from || 'All'} - ${activeFilter.to || 'All'}${activeFilter.trust ? ` (${activeFilter.trust})` : ''}`}
         </div>
 
         {/* DataTables Controls: Show entries & Search */}
@@ -703,9 +524,12 @@ export default function PaymentModeReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1500px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: '1700px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
+                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                  User / Trust {renderSortIndicator('trustName')}
+                </th>
                 <th style={{ ...thStyle, width: '150px' }} onClick={() => handleSort('receiptNo')}>
                   Receipt No. {renderSortIndicator('receiptNo')}
                 </th>
@@ -742,7 +566,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -758,7 +582,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -774,7 +598,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -790,6 +614,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               ) : (
                 paginatedData.map((row, idx) => (
                   <tr key={row.receiptNo || idx}>
+                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
                     <td style={tdStyle}>{row.receiptNo}</td>
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>
                     <td style={tdStyle}>{row.panNumber || ''}</td>

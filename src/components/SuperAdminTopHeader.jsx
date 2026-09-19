@@ -13,7 +13,8 @@ import {
   Pencil,
   Boxes,
   Users,
-  KeyRound
+  KeyRound,
+  CreditCard
 } from 'lucide-react';
 
 export default function SuperAdminTopHeader({ user, onLogout, onToggleSidebar }) {
@@ -218,8 +219,8 @@ export default function SuperAdminTopHeader({ user, onLogout, onToggleSidebar })
                     navigate('/superadmin/reports');
                   }}
                 >
-                  <ShieldCheck size={16} />
-                  <span style={{ textAlign: 'left', flex: 1 }}>Platform Reports</span>
+                  <CreditCard size={16} />
+                  <span style={{ textAlign: 'left', flex: 1 }}>Subscription Revenue</span>
                 </button>
                 <button
                   type="button"

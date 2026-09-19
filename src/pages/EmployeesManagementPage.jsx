@@ -275,7 +275,7 @@ export default function EmployeesManagementPage() {
             <span className="stat-modern-val">{totalEmployeesCount}</span>
           </div>
           <div className="stat-modern-bottom">
-            <span className="stat-modern-title">Total Staff</span>
+            <span className="stat-modern-title">Total Staffs</span>
           </div>
         </div>
 
@@ -285,7 +285,7 @@ export default function EmployeesManagementPage() {
             <span className="stat-modern-val">{activeEmployeesCount}</span>
           </div>
           <div className="stat-modern-bottom">
-            <span className="stat-modern-title">Active Team</span>
+            <span className="stat-modern-title">Active Staffs</span>
           </div>
         </div>
 

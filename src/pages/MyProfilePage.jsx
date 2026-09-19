@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
 import { ChevronUp, Sparkles, Pencil } from 'lucide-react';
+import { getCurrentUser, isSuperUser, getSuperAdminSession, getTrustSession } from '../utils/authStorage';
 
 export default function MyProfilePage({ user }) {
   const navigate = useNavigate();
@@ -12,29 +13,41 @@ export default function MyProfilePage({ user }) {
   const [successPopup, setSuccessPopup] = useState(false);
 
   const getActiveUser = () => {
-    let localUser = {};
-    try {
-      localUser = JSON.parse(localStorage.getItem('user_info') || '{}');
-    } catch (e) {}
-
-    const u = user || localUser;
-    return u || {};
+    if (isSuperAdmin) {
+      const superSess = getSuperAdminSession()?.user;
+      if (superSess && isSuperUser(superSess)) return superSess;
+      if (user && isSuperUser(user)) return user;
+      return {
+        _id: 'usr_superadmin',
+        name: 'DONATION RECEIPT SUPER ADMIN',
+        trustName: 'DONATION RECEIPT SUPER ADMIN',
+        contactPerson: 'Super Administrator',
+        email: 'admin@donationreceipt.in',
+        role: 'SuperAdmin',
+        isSuperAdmin: true,
+        status: 'Active'
+      };
+    }
+    const trustSess = getTrustSession()?.user;
+    if (trustSess && !isSuperUser(trustSess)) return trustSess;
+    if (user && !isSuperUser(user)) return user;
+    return {};
   };
 
   const buildProfileFromUser = (u) => {
     if (!u) u = {};
     const tName = isSuperAdmin
       ? (u.trustName || u.name || 'DONATION RECEIPT SUPER ADMIN')
-      : (u.trustName || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || 'Trust Organization');
+      : ((u.trustName && u.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? u.trustName : '') || (u.name && !isSuperUser(u) ? u.name : '') || 'Trust Organization');
     const rawPrefix = tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'REC';
     const cPerson = isSuperAdmin
       ? (u.contactPerson || u.name || 'Super Administrator')
-      : (u.contactPerson || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || '');
+      : (u.contactPerson || (u.name && !isSuperUser(u) ? u.name : '') || '');
 
     return {
       _id: u._id || u.id || '',
       name: tName,
-      email: u.email || '',
+      email: u.email || (isSuperAdmin ? 'admin@donationreceipt.in' : ''),
       phone: u.mobile || u.phone || '',
       address: u.address || '',
       state: u.state || 'Tamil Nadu',
@@ -72,29 +85,16 @@ export default function MyProfilePage({ user }) {
         try {
           const parsed = JSON.parse(userCache);
           if (parsed && (parsed.email?.toLowerCase() === userEmail || parsed.name)) {
-            return { ...buildProfileFromUser(activeUser), ...parsed };
+            if (isSuperAdmin && !isSuperUser(parsed)) {
+              // Ignore non-super cache for SuperAdmin
+            } else if (!isSuperAdmin && isSuperUser(parsed)) {
+              // Ignore super cache for Trust
+            } else {
+              return { ...buildProfileFromUser(activeUser), ...parsed };
+            }
           }
         } catch (e) {}
       }
-    }
-
-    // Check legacy profile_data ONLY IF matching current role and email
-    const legacySaved = localStorage.getItem('profile_data');
-    if (legacySaved) {
-      try {
-        const parsed = JSON.parse(legacySaved);
-        const parsedEmail = (parsed.email || '').toLowerCase().trim();
-        const isParsedSuper = Boolean(parsed.isSuperAdmin || (parsed.name && parsed.name.toLowerCase().includes('super')));
-
-        // If on trust profile, NEVER use super admin cached data
-        if (!isSuperAdmin && isParsedSuper) {
-          localStorage.removeItem('profile_data'); // Purge polluted cache
-        } else if (isSuperAdmin && !isParsedSuper) {
-          localStorage.removeItem('profile_data');
-        } else if (userEmail && parsedEmail && userEmail === parsedEmail) {
-          return { ...buildProfileFromUser(activeUser), ...parsed };
-        }
-      } catch (e) {}
     }
 
     return buildProfileFromUser(activeUser);
@@ -106,28 +106,28 @@ export default function MyProfilePage({ user }) {
     const activeUser = getActiveUser();
     setProfileData(getInitialProfile());
 
-    // Fetch live user record from backend to guarantee 100% accuracy for this specific admin
-    const targetId = activeUser._id || activeUser.id || activeUser.email;
-    if (targetId) {
-      fetch(`/api/users/${encodeURIComponent(targetId)}`)
-        .then(r => r.json())
-        .then(data => {
-          const fetched = data?.data || data?.user || (data?.email ? data : null);
-          if (fetched && (fetched.email || fetched.name || fetched.trustName)) {
-            // Strictly guard: do not accept superadmin data if on trust profile
-            const isFetchedSuper = fetched.isSuperAdmin || (fetched.role && fetched.role.toLowerCase().includes('super'));
-            if (!isSuperAdmin && isFetchedSuper) return;
+    // Only fetch live backend record for Trust Admin to avoid overriding SuperAdmin
+    if (!isSuperAdmin) {
+      const targetId = activeUser._id || activeUser.id || activeUser.email;
+      if (targetId) {
+        fetch(`/api/users/${encodeURIComponent(targetId)}`)
+          .then(r => r.json())
+          .then(data => {
+            const fetched = data?.data || data?.user || (data?.email ? data : null);
+            if (fetched && (fetched.email || fetched.name || fetched.trustName)) {
+              if (isSuperUser(fetched)) return;
 
-            const freshProfile = buildProfileFromUser(fetched);
-            setProfileData(freshProfile);
-            if (fetched.email) {
-              localStorage.setItem(`profile_data_${fetched.email.toLowerCase()}`, JSON.stringify(freshProfile));
+              const freshProfile = buildProfileFromUser(fetched);
+              setProfileData(freshProfile);
+              if (fetched.email) {
+                localStorage.setItem(`profile_data_${fetched.email.toLowerCase()}`, JSON.stringify(freshProfile));
+              }
             }
-          }
-        })
-        .catch(() => {});
+          })
+          .catch(() => {});
+      }
     }
-  }, [user, location.pathname]);
+  }, [user, location.pathname, isSuperAdmin]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -417,12 +417,12 @@ export default function MyProfilePage({ user }) {
           </div>
         </div>
 
-        {/* Bottom Action Buttons (Screenshot 2) */}
+        {/* Bottom Action Buttons */}
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
           <button
             type="button"
             className="btn-primary-green"
-            onClick={() => navigate('/trust/edit-profile')}
+            onClick={() => navigate(isSuperAdmin ? '/superadmin/edit-profile' : '/trust/edit-profile')}
             style={{ padding: '10px 28px', fontSize: '14px', borderRadius: '8px' }}
           >
             Edit Profile

@@ -13,8 +13,10 @@ import {
   Check,
   ChevronUp,
   Loader2,
-  Sparkles
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 export default function UpgradePlanPage({ user }) {
   const navigate = useNavigate();
@@ -46,10 +48,50 @@ export default function UpgradePlanPage({ user }) {
     }
   ];
 
+  // Resolve active logged-in trust session
+  const activeSessionUser = (!isSuperUser(user) && user) || getTrustSession()?.user || {};
+  const [liveUser, setLiveUser] = useState(activeSessionUser);
+
+  const currentPlanName = liveUser?.plan || activeSessionUser?.plan || 'Standard';
+
   const [plans, setPlans] = useState(DEFAULT_PLANS);
-  const [selectedPlanId, setSelectedPlanId] = useState('standard');
+  const [selectedPlanId, setSelectedPlanId] = useState(() => {
+    const pLower = currentPlanName.toLowerCase();
+    if (pLower.includes('standard')) return 'advanced';
+    if (pLower.includes('advanced')) return 'enterprise';
+    if (pLower.includes('starter')) return 'standard';
+    return 'enterprise';
+  });
+
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Fetch live user data for up-to-date plan status
+  useEffect(() => {
+    const targetId = activeSessionUser?._id || activeSessionUser?.id || activeSessionUser?.email;
+    if (targetId) {
+      fetch(`/api/users/${encodeURIComponent(targetId)}`)
+        .then(r => r.json())
+        .then(d => {
+          const u = d?.data || d?.user || (d?.email ? d : null);
+          if (u) {
+            setLiveUser(u);
+            if (u.name || u.trustName) {
+              setFormData(prev => ({
+                ...prev,
+                name: u.trustName || u.name || prev.name,
+                email: u.email || prev.email,
+                mobile: u.mobile || u.phone || prev.mobile,
+                address: u.address || prev.address,
+                state: u.state || prev.state
+              }));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeSessionUser?.email]);
+
+  // Fetch active plans from backend
   useEffect(() => {
     fetch('/api/plans?status=Active')
       .then(r => r.json())
@@ -64,21 +106,34 @@ export default function UpgradePlanPage({ user }) {
             staffUsers: p.staffUserLimit || '4 Staff Users'
           }));
           setPlans(mapped);
-          if (!mapped.some(p => p.id === selectedPlanId)) {
+
+          // Auto-select next higher tier if available
+          const currLower = currentPlanName.toLowerCase();
+          const nextPlan = mapped.find(p => {
+            const pCode = (p.code || p.id || p.name).toLowerCase();
+            if (currLower.includes('standard')) return pCode.includes('advanced') || pCode.includes('enterprise');
+            if (currLower.includes('advanced')) return pCode.includes('enterprise');
+            if (currLower.includes('starter')) return pCode.includes('standard');
+            return false;
+          });
+
+          if (nextPlan) {
+            setSelectedPlanId(nextPlan.id);
+          } else if (mapped.length > 0 && !mapped.some(p => p.id === selectedPlanId)) {
             setSelectedPlanId(mapped[0].id);
           }
         }
       })
       .catch(console.error);
-  }, []);
+  }, [currentPlanName]);
 
-  // Billing Details matching Screenshot 2
+  // Billing Details Form Data
   const [formData, setFormData] = useState({
-    name: user?.trustName || user?.name || '',
-    email: user?.email || '',
-    mobile: user?.mobile || '',
-    address: user?.address || '',
-    state: user?.state || '',
+    name: activeSessionUser?.trustName || activeSessionUser?.name || '',
+    email: activeSessionUser?.email || '',
+    mobile: activeSessionUser?.mobile || activeSessionUser?.phone || '',
+    address: activeSessionUser?.address || '',
+    state: activeSessionUser?.state || 'Tamil Nadu',
     gstin: ''
   });
 
@@ -109,14 +164,23 @@ export default function UpgradePlanPage({ user }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Math matching Screenshots 1, 2, 3 exactly:
-  // Base plan cost = 1200 / 365 * 333 = 1094.79 (Remaining Credit)
+  const getCurrentPlanUsers = (planName) => {
+    const pl = (planName || '').toLowerCase();
+    if (pl.includes('enterprise')) return 'Unlimited Staff';
+    if (pl.includes('advanced')) return '9 Staff Users';
+    if (pl.includes('starter')) return '1 Staff User';
+    return '4 Staff Users';
+  };
+
+  // Math Calculations:
   const remainingDays = 333;
   const remainingCredit = 1094.79;
 
   const currentSelectedPlan = plans.find(p => p.id === selectedPlanId) || plans[0];
+  const isSelectedSameAsCurrent = (currentSelectedPlan?.name || '').toLowerCase() === currentPlanName.toLowerCase();
+
   const newPlanProRata = (currentSelectedPlan.price / 365) * remainingDays;
-  const upgradeAmount = (newPlanProRata - remainingCredit).toFixed(2);
+  const upgradeAmount = isSelectedSameAsCurrent ? '0.00' : Math.max(0, (newPlanProRata - remainingCredit)).toFixed(2);
   const gstAmount = (parseFloat(upgradeAmount) * 0.18).toFixed(2);
   const grandTotal = (parseFloat(upgradeAmount) + parseFloat(gstAmount)).toFixed(2);
 
@@ -138,6 +202,17 @@ export default function UpgradePlanPage({ user }) {
   // Trigger Razorpay Checkout on Upgrade Now
   const handleUpgradeWithRazorpay = async (e) => {
     e.preventDefault();
+
+    if (isSelectedSameAsCurrent) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Already on this Plan',
+        message: `Your trust is currently active on the ${currentPlanName} plan. Please choose a different plan above to upgrade.`,
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
 
     if (!formData.name.trim() || !formData.email.trim() || !formData.mobile.trim() || !formData.address.trim()) {
       setPopup({
@@ -179,7 +254,7 @@ export default function UpgradePlanPage({ user }) {
 
       // 3. Open Razorpay Checkout Window
       const options = {
-        key: data.keyId || 'rzp_test_1DP5mmOlF5G5ag',
+        key: data.keyId || 'rzp_test_TdnRfnHpDeyWqd',
         amount: data.order.amount,
         currency: data.order.currency || 'INR',
         name: 'DonationReceipt.in',
@@ -205,7 +280,11 @@ export default function UpgradePlanPage({ user }) {
             await fetch('/api/payment/verify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(paymentResponse)
+              body: JSON.stringify({
+                ...paymentResponse,
+                email: formData.email,
+                plan: currentSelectedPlan.name
+              })
             });
           } catch (err) {
             console.error('Verification error:', err);
@@ -215,10 +294,10 @@ export default function UpgradePlanPage({ user }) {
             isOpen: true,
             type: 'success',
             title: 'Upgrade Successful!',
-            message: `Congratulations! Your plan has been upgraded to ${currentSelectedPlan.name}. Total Paid: ₹${grandTotal} (Payment ID: ${paymentResponse.razorpay_payment_id || 'pay_success'})`,
+            message: `Congratulations! Your subscription has been successfully upgraded to the ${currentSelectedPlan.name} Plan. Total Paid: ₹${grandTotal} (Payment ID: ${paymentResponse.razorpay_payment_id || 'pay_success'})`,
             onConfirm: () => {
               setPopup(p => ({ ...p, isOpen: false }));
-              navigate('/trust');
+              navigate('/trust/staff');
             }
           });
         },
@@ -312,32 +391,37 @@ export default function UpgradePlanPage({ user }) {
           </div>
 
           <div style={{ padding: '22px 20px' }}>
-            {/* Current Plan Cyan Strip matching Screenshot 1 */}
+            {/* Current Plan Active Status Strip */}
             <div
               style={{
-                backgroundColor: '#dcf1f9',
-                borderRadius: '4px',
-                padding: '10px 16px',
+                backgroundColor: '#e0f2fe',
+                border: '1px solid #bae6fd',
+                borderRadius: '6px',
+                padding: '12px 18px',
                 marginBottom: '24px',
                 fontSize: '13.5px',
-                color: '#212529',
+                color: '#0369a1',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
+                gap: '14px',
                 flexWrap: 'wrap'
               }}
             >
-              <span>Current Plan : <strong>Base</strong></span>
-              <span style={{ color: '#aaa' }}>|</span>
-              <span style={{ color: '#0056b3' }}>Users : <strong>1</strong></span>
-              <span style={{ color: '#aaa' }}>|</span>
-              <span>Remaining Days : <strong>333</strong></span>
+              <span>Current Active Plan : <strong style={{ color: '#0c4a6e', fontSize: '14px' }}>{currentPlanName}</strong></span>
+              <span style={{ color: '#7dd3fc' }}>|</span>
+              <span>Staff Users Allowed : <strong style={{ color: '#0c4a6e' }}>{getCurrentPlanUsers(currentPlanName)}</strong></span>
+              <span style={{ color: '#7dd3fc' }}>|</span>
+              <span>Remaining Days : <strong style={{ color: '#0c4a6e' }}>{remainingDays}</strong></span>
+              <span style={{ color: '#7dd3fc' }}>|</span>
+              <span>Status : <strong style={{ color: '#059669', backgroundColor: '#d1fae5', padding: '2px 8px', borderRadius: '10px', fontSize: '12px' }}>● Active Subscribed</strong></span>
             </div>
 
-            {/* 3 Plan Cards Grid */}
+            {/* Plan Cards Grid */}
             <div className="upgrade-plans-grid">
               {plans.map(p => {
+                const isCurrentPlan = (p.code || p.id || p.name || '').toLowerCase() === currentPlanName.toLowerCase();
                 const isSelected = p.id === selectedPlanId;
+
                 return (
                   <div
                     key={p.id}
@@ -345,20 +429,52 @@ export default function UpgradePlanPage({ user }) {
                       borderRadius: '12px',
                       overflow: 'hidden',
                       backgroundColor: '#ffffff',
-                      border: isSelected ? '2px solid #28a745' : '1px solid #dee2e6',
-                      boxShadow: isSelected ? '0 6px 20px rgba(40, 167, 69, 0.22)' : '0 1px 3px rgba(0,0,0,0.04)',
+                      border: isCurrentPlan
+                        ? '2px solid #0284c7'
+                        : (isSelected ? '2px solid #28a745' : '1px solid #dee2e6'),
+                      boxShadow: isCurrentPlan
+                        ? '0 6px 20px rgba(2, 132, 199, 0.18)'
+                        : (isSelected ? '0 6px 20px rgba(40, 167, 69, 0.22)' : '0 1px 3px rgba(0,0,0,0.04)'),
                       display: 'flex',
                       flexDirection: 'column',
+                      position: 'relative',
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    {/* Top Green Portion */}
+                    {/* Current Plan Badge */}
+                    {isCurrentPlan && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '10px',
+                          right: '10px',
+                          backgroundColor: '#ffffff',
+                          color: '#0284c7',
+                          fontSize: '10px',
+                          fontWeight: '800',
+                          padding: '3px 8px',
+                          borderRadius: '12px',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          letterSpacing: '0.4px',
+                          zIndex: 2
+                        }}
+                      >
+                        <ShieldCheck size={12} strokeWidth={2.5} />
+                        <span>CURRENT PLAN</span>
+                      </div>
+                    )}
+
+                    {/* Top Portion */}
                     <div
                       style={{
-                        backgroundColor: '#28a745',
+                        backgroundColor: isCurrentPlan ? '#0284c7' : (isSelected ? '#28a745' : '#475569'),
                         color: '#ffffff',
                         padding: '18px 16px',
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        transition: 'background-color 0.2s ease'
                       }}
                     >
                       <div style={{ fontSize: '18px', fontWeight: '700' }}>{p.name}</div>
@@ -372,28 +488,29 @@ export default function UpgradePlanPage({ user }) {
                     <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#212529' }}>
-                          <Check size={16} color="#28a745" strokeWidth={3} />
+                          <Check size={16} color={isCurrentPlan ? '#0284c7' : '#28a745'} strokeWidth={3} />
                           <span>{p.adminUsers} Admin User</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#212529' }}>
-                          <Check size={16} color="#28a745" strokeWidth={3} />
+                          <Check size={16} color={isCurrentPlan ? '#0284c7' : '#28a745'} strokeWidth={3} />
                           <span>{p.staffUsers}</span>
                         </div>
                       </div>
 
-                      {/* Select / Selected Button */}
-                      {isSelected ? (
+                      {/* Button Actions */}
+                      {isCurrentPlan ? (
                         <button
                           type="button"
+                          disabled
                           style={{
-                            backgroundColor: '#28a745',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '8px 0',
+                            backgroundColor: '#f0f9ff',
+                            color: '#0284c7',
+                            border: '1.5px solid #bae6fd',
+                            borderRadius: '6px',
+                            padding: '9px 0',
                             width: '100%',
-                            fontWeight: '600',
-                            fontSize: '13.5px',
+                            fontWeight: '700',
+                            fontSize: '13px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -402,7 +519,30 @@ export default function UpgradePlanPage({ user }) {
                           }}
                         >
                           <Check size={15} strokeWidth={3} />
-                          <span>Selected</span>
+                          <span>Your Current Plan</span>
+                        </button>
+                      ) : isSelected ? (
+                        <button
+                          type="button"
+                          style={{
+                            backgroundColor: '#28a745',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '9px 0',
+                            width: '100%',
+                            fontWeight: '700',
+                            fontSize: '13.5px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            cursor: 'default',
+                            boxShadow: '0 2px 6px rgba(40, 167, 69, 0.35)'
+                          }}
+                        >
+                          <Check size={16} strokeWidth={3} />
+                          <span>Selected for Upgrade</span>
                         </button>
                       ) : (
                         <button
@@ -411,9 +551,9 @@ export default function UpgradePlanPage({ user }) {
                           style={{
                             backgroundColor: '#ffffff',
                             color: '#28a745',
-                            border: '1px solid #28a745',
-                            borderRadius: '4px',
-                            padding: '8px 0',
+                            border: '1.5px solid #28a745',
+                            borderRadius: '6px',
+                            padding: '9px 0',
                             width: '100%',
                             fontWeight: '600',
                             fontSize: '13.5px',
@@ -429,7 +569,7 @@ export default function UpgradePlanPage({ user }) {
                             e.currentTarget.style.color = '#28a745';
                           }}
                         >
-                          Select Plan
+                          Select to Upgrade
                         </button>
                       )}
                     </div>
@@ -654,23 +794,27 @@ export default function UpgradePlanPage({ user }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px', marginBottom: '22px' }}>
               <tbody>
                 <tr style={{ borderBottom: '1px solid #dee2e6' }}>
-                  <td style={{ padding: '10px 0', color: '#333' }}>Current Plan</td>
-                  <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '700', color: '#212529' }}>Base</td>
+                  <td style={{ padding: '10px 0', color: '#333' }}>Current Active Plan</td>
+                  <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '700', color: '#0284c7' }}>
+                    {currentPlanName}
+                  </td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #dee2e6' }}>
-                  <td style={{ padding: '10px 0', color: '#333' }}>Remaining Credit</td>
+                  <td style={{ padding: '10px 0', color: '#333' }}>Remaining Credit Balance</td>
                   <td style={{ padding: '10px 0', textAlign: 'right', color: '#212529' }}>₹ {remainingCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #dee2e6' }}>
-                  <td style={{ padding: '10px 0', color: '#333' }}>New Plan</td>
-                  <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '700', color: '#212529' }}>{currentSelectedPlan.name}</td>
+                  <td style={{ padding: '10px 0', color: '#333' }}>Selected Upgrade Plan</td>
+                  <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '700', color: isSelectedSameAsCurrent ? '#0284c7' : '#28a745' }}>
+                    {currentSelectedPlan.name}
+                  </td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #dee2e6' }}>
                   <td style={{ padding: '10px 0', color: '#333' }}>Upgrade Amount</td>
                   <td style={{ padding: '10px 0', textAlign: 'right', color: '#212529' }}>₹ {parseFloat(upgradeAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #dee2e6' }}>
-                  <td style={{ padding: '10px 0', color: '#333' }}>GST</td>
+                  <td style={{ padding: '10px 0', color: '#333' }}>GST (18%)</td>
                   <td style={{ padding: '10px 0', textAlign: 'right', color: '#212529' }}>₹ {parseFloat(gstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                 </tr>
                 <tr>
@@ -682,30 +826,48 @@ export default function UpgradePlanPage({ user }) {
               </tbody>
             </table>
 
+            {/* Same Plan Notice Banner */}
+            {isSelectedSameAsCurrent ? (
+              <div
+                style={{
+                  backgroundColor: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: '6px',
+                  padding: '12px 16px',
+                  color: '#0369a1',
+                  fontSize: '13px',
+                  textAlign: 'center',
+                  marginBottom: '16px'
+                }}
+              >
+                You are currently active on the <strong>{currentPlanName}</strong> plan. Please select a different plan in Step 1 to proceed with an upgrade.
+              </div>
+            ) : null}
+
             {/* Centered Upgrade Now Button */}
             <div style={{ textAlign: 'center', marginTop: '16px' }}>
               <button
                 type="button"
                 onClick={handleUpgradeWithRazorpay}
-                disabled={isProcessing}
+                disabled={isProcessing || isSelectedSameAsCurrent}
                 className="upgrade-submit-btn"
                 style={{
-                  backgroundColor: '#28a745',
+                  backgroundColor: isSelectedSameAsCurrent ? '#94a3b8' : '#28a745',
                   color: '#ffffff',
                   border: 'none',
                   padding: '10px 48px',
                   fontSize: '15px',
                   fontWeight: '600',
                   borderRadius: '4px',
-                  cursor: isProcessing ? 'wait' : 'pointer',
-                  boxShadow: '0 2px 6px rgba(40, 167, 69, 0.35)',
+                  cursor: isSelectedSameAsCurrent ? 'not-allowed' : (isProcessing ? 'wait' : 'pointer'),
+                  boxShadow: isSelectedSameAsCurrent ? 'none' : '0 2px 6px rgba(40, 167, 69, 0.35)',
                   transition: 'background-color 0.15s ease',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '8px'
                 }}
-                onMouseOver={(e) => !isProcessing && (e.currentTarget.style.backgroundColor = '#218838')}
-                onMouseOut={(e) => !isProcessing && (e.currentTarget.style.backgroundColor = '#28a745')}
+                onMouseOver={(e) => !isProcessing && !isSelectedSameAsCurrent && (e.currentTarget.style.backgroundColor = '#218838')}
+                onMouseOut={(e) => !isProcessing && !isSelectedSameAsCurrent && (e.currentTarget.style.backgroundColor = '#28a745')}
               >
                 {isProcessing ? (
                   <>
@@ -745,102 +907,62 @@ export default function UpgradePlanPage({ user }) {
             }}
           >
             <HelpCircle size={18} />
-            <span>Need Help?</span>
+            <span>4. Need Help?</span>
           </div>
 
-          {/* 3 Columns: Email, WhatsApp, Video */}
-          <div className="upgrade-help-grid">
-            {/* Email Support */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div
-                style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '6px',
-                  backgroundColor: '#eaf7ec',
-                  color: '#28a745',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: '10px'
-                }}
-              >
-                <Mail size={22} />
+          <div style={{ padding: '22px 20px' }}>
+            <p style={{ fontSize: '13.5px', color: '#495057', lineHeight: '1.6', margin: '0 0 16px 0' }}>
+              If you have any questions regarding subscriptions, custom NGO billing, or enterprise onboarding, please reach out directly:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13.5px', color: '#212529' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Mail size={16} color="#28a745" />
+                <span>Email : <a href="mailto:support@donationreceipt.in" style={{ color: '#007bff', textDecoration: 'none' }}>support@donationreceipt.in</a></span>
               </div>
-              <strong style={{ fontSize: '13.5px', color: '#212529', marginBottom: '4px' }}>Email Support</strong>
-              <a
-                href="mailto:support@donationreceipt.in"
-                style={{ fontSize: '12.5px', color: '#555', textDecoration: 'none' }}
-              >
-                support@donationreceipt.in
-              </a>
-            </div>
-
-            {/* WhatsApp */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div
-                style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '6px',
-                  backgroundColor: '#eaf7ec',
-                  color: '#28a745',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: '10px'
-                }}
-              >
-                <Phone size={22} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Phone size={16} color="#28a745" />
+                <span>Helpline : <strong style={{ color: '#212529' }}>+91 98765 43210</strong></span>
               </div>
-              <strong style={{ fontSize: '13.5px', color: '#212529', marginBottom: '4px' }}>WhatsApp</strong>
-              <a
-                href="tel:+919082151500"
-                style={{ fontSize: '12.5px', color: '#555', textDecoration: 'none' }}
-              >
-                +91 90821 51500
-              </a>
-            </div>
-
-            {/* Video Tutorials */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div
-                style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '6px',
-                  backgroundColor: '#eaf7ec',
-                  color: '#28a745',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: '10px'
-                }}
-              >
-                <Video size={22} />
-              </div>
-              <strong style={{ fontSize: '13.5px', color: '#212529', marginBottom: '4px' }}>Video Tutorials</strong>
-              <a
-                href="https://youtube.com/@donationreceipt"
-                target="_blank"
-                rel="noreferrer"
-                style={{ fontSize: '12.5px', color: '#0056b3', textDecoration: 'none' }}
-              >
-                Visit Channel
-              </a>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Themed Simple Popup for Razorpay Payment Confirmation */}
+      {/* Floating Scroll to Top */}
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={scrollToTop}
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '80px',
+            backgroundColor: '#28a745',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '50%',
+            width: '42px',
+            height: '42px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            zIndex: 999
+          }}
+        >
+          <ChevronUp size={22} />
+        </button>
+      )}
+
+      {/* Themed Confirmation & Notification Modal */}
       <SimplePopup
         isOpen={popup.isOpen}
         type={popup.type}
         title={popup.title}
         message={popup.message}
+        confirmText="OK"
         onConfirm={popup.onConfirm}
-        onCancel={() => setPopup(p => ({ ...p, isOpen: false }))}
       />
     </>
   );

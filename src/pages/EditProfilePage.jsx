@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SimplePopup from '../components/SimplePopup';
 import { ChevronUp, AlertTriangle, CheckCircle2, Sparkles, User } from 'lucide-react';
+import { getCurrentUser, isSuperUser, getSuperAdminSession, getTrustSession, setSuperAdminSession, setTrustSession } from '../utils/authStorage';
 
 export default function EditProfilePage({ user, onUpdateUser }) {
   const navigate = useNavigate();
@@ -36,24 +37,36 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   };
 
   const getInitialFormData = () => {
-    let localUser = {};
-    try {
-      localUser = JSON.parse(localStorage.getItem('user_info') || '{}');
-    } catch (e) {}
-    const savedUser = user || localUser;
+    let savedUser = null;
+    if (isSuperAdmin) {
+      const superSess = getSuperAdminSession()?.user;
+      savedUser = (superSess && isSuperUser(superSess)) ? superSess : ((user && isSuperUser(user)) ? user : {
+        _id: 'usr_superadmin',
+        name: 'DONATION RECEIPT SUPER ADMIN',
+        trustName: 'DONATION RECEIPT SUPER ADMIN',
+        contactPerson: 'Super Administrator',
+        email: 'admin@donationreceipt.in',
+        role: 'SuperAdmin',
+        isSuperAdmin: true,
+        status: 'Active'
+      });
+    } else {
+      const trustSess = getTrustSession()?.user;
+      savedUser = (trustSess && !isSuperUser(trustSess)) ? trustSess : ((user && !isSuperUser(user)) ? user : {});
+    }
 
     const tName = isSuperAdmin
       ? (savedUser?.trustName || savedUser?.name || 'DONATION RECEIPT SUPER ADMIN')
-      : (savedUser?.trustName || (savedUser?.name && !savedUser.name.toLowerCase().includes('super') ? savedUser.name : '') || '');
+      : ((savedUser?.trustName && savedUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? savedUser.trustName : '') || (savedUser?.name && !isSuperUser(savedUser) ? savedUser.name : '') || '');
     const rawPrefix = tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'REC';
     const cPerson = isSuperAdmin
       ? (savedUser?.contactPerson || savedUser?.name || 'Super Administrator')
-      : (savedUser?.contactPerson || (savedUser?.name && !savedUser.name.toLowerCase().includes('super') ? savedUser.name : '') || '');
+      : (savedUser?.contactPerson || (savedUser?.name && !isSuperUser(savedUser) ? savedUser.name : '') || '');
     const parts = cPerson ? cPerson.split(' ') : [];
 
     const baseData = {
       name: tName,
-      email: savedUser?.email || '',
+      email: savedUser?.email || (isSuperAdmin ? 'admin@donationreceipt.in' : ''),
       phone: savedUser?.mobile || savedUser?.phone || '',
       address: savedUser?.address || '',
       state: savedUser?.state || '',
@@ -90,24 +103,13 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       try {
         const userCache = JSON.parse(localStorage.getItem(`profile_data_${userEmail}`) || '{}');
         if (userCache && (userCache.email?.toLowerCase() === userEmail || userCache.name)) {
-          return { ...baseData, ...userCache };
-        }
-      } catch (e) {}
-    }
-
-    const legacySaved = localStorage.getItem('profile_data');
-    if (legacySaved) {
-      try {
-        const parsed = JSON.parse(legacySaved);
-        const parsedEmail = (parsed.email || '').toLowerCase().trim();
-        const isParsedSuper = Boolean(parsed.isSuperAdmin || (parsed.name && parsed.name.toLowerCase().includes('super')));
-
-        if (!isSuperAdmin && isParsedSuper) {
-          localStorage.removeItem('profile_data');
-        } else if (isSuperAdmin && !isParsedSuper) {
-          localStorage.removeItem('profile_data');
-        } else if (userEmail && parsedEmail && userEmail === parsedEmail) {
-          return { ...baseData, ...parsed };
+          if (isSuperAdmin && !isSuperUser(userCache)) {
+            // Do not use non-super cache for SuperAdmin
+          } else if (!isSuperAdmin && isSuperUser(userCache)) {
+            // Do not use super cache for Trust
+          } else {
+            return { ...baseData, ...userCache };
+          }
         }
       } catch (e) {}
     }
@@ -123,57 +125,56 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     setHasLogo(Boolean(initial.logo));
     setHasSignature(Boolean(initial.signature));
 
-    // Fetch live backend user details to ensure complete and authentic profile fields
-    const targetId = user?._id || user?.id || user?.email || initial.email;
-    if (targetId) {
-      fetch(`/api/users/${encodeURIComponent(targetId)}`)
-        .then(r => r.json())
-        .then(data => {
-          const u = data?.data || data?.user || (data?.email ? data : null);
-          if (u && (u.email || u.name || u.trustName)) {
-            const isFetchedSuper = u.isSuperAdmin || (u.role && u.role.toLowerCase().includes('super'));
-            if (!isSuperAdmin && isFetchedSuper) return;
+    // Fetch live backend user details to ensure complete and authentic profile fields only for Trust Admin
+    if (!isSuperAdmin) {
+      const trustSess = getTrustSession()?.user;
+      const activeUser = (trustSess && !isSuperUser(trustSess)) ? trustSess : ((user && !isSuperUser(user)) ? user : {});
+      const targetId = activeUser._id || activeUser.id || activeUser.email || initial.email;
+      if (targetId) {
+        fetch(`/api/users/${encodeURIComponent(targetId)}`)
+          .then(r => r.json())
+          .then(data => {
+            const u = data?.data || data?.user || (data?.email ? data : null);
+            if (u && (u.email || u.name || u.trustName)) {
+              if (isSuperUser(u)) return; // Strictly ignore superadmin data for Trust
 
-            const tName = isSuperAdmin
-              ? (u.trustName || u.name || 'DONATION RECEIPT SUPER ADMIN')
-              : (u.trustName || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || '');
-            const rawPrefix = tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'REC';
-            const cPerson = isSuperAdmin
-              ? (u.contactPerson || u.name || 'Super Administrator')
-              : (u.contactPerson || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || '');
-            const parts = cPerson ? cPerson.split(' ') : [];
+              const tName = u.trustName || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || '';
+              const rawPrefix = tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'REC';
+              const cPerson = u.contactPerson || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || '';
+              const parts = cPerson ? cPerson.split(' ') : [];
 
-            setFormData(prev => ({
-              ...prev,
-              name: tName || prev.name,
-              email: u.email || prev.email,
-              phone: u.mobile || u.phone || prev.phone,
-              address: u.address || prev.address,
-              state: u.state || prev.state,
-              registrationNo: u.registrationNo || prev.registrationNo,
-              panNo: u.panNo || prev.panNo,
-              fcraNo: u.fcraNo || prev.fcraNo,
-              website: u.website || prev.website,
-              contactPerson: cPerson || prev.contactPerson,
-              contactPersonEmail: u.contactPersonEmail || prev.contactPersonEmail,
-              contactPersonMobile: u.contactPersonMobile || prev.contactPersonMobile,
-              registrationType: u.registrationType || prev.registrationType || '12A',
-              reg12ANo: u.reg12ANo || u.section80GRegNo || prev.reg12ANo || '',
-              reg12ADate: u.reg12ADate || prev.reg12ADate,
-              firstName: parts[0] || prev.firstName,
-              middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : prev.middleName,
-              surname: parts.length > 1 ? parts[parts.length - 1] : prev.surname,
-              signatoryPan: u.signatoryPan || u.panNo || prev.signatoryPan,
-              logo: u.logo || prev.logo || '',
-              signature: u.signature || prev.signature || ''
-            }));
-            if (u.logo) setHasLogo(true);
-            if (u.signature) setHasSignature(true);
-          }
-        })
-        .catch(() => {});
+              setFormData(prev => ({
+                ...prev,
+                name: tName || prev.name,
+                email: u.email || prev.email,
+                phone: u.mobile || u.phone || prev.phone,
+                address: u.address || prev.address,
+                state: u.state || prev.state,
+                registrationNo: u.registrationNo || prev.registrationNo,
+                panNo: u.panNo || prev.panNo,
+                fcraNo: u.fcraNo || prev.fcraNo,
+                website: u.website || prev.website,
+                contactPerson: cPerson || prev.contactPerson,
+                contactPersonEmail: u.contactPersonEmail || prev.contactPersonEmail,
+                contactPersonMobile: u.contactPersonMobile || prev.contactPersonMobile,
+                registrationType: u.registrationType || prev.registrationType || '12A',
+                reg12ANo: u.reg12ANo || u.section80GRegNo || prev.reg12ANo || '',
+                reg12ADate: u.reg12ADate || prev.reg12ADate,
+                firstName: parts[0] || prev.firstName,
+                middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : prev.middleName,
+                surname: parts.length > 1 ? parts[parts.length - 1] : prev.surname,
+                signatoryPan: u.signatoryPan || u.panNo || prev.signatoryPan,
+                logo: u.logo || prev.logo || '',
+                signature: u.signature || prev.signature || ''
+              }));
+              if (u.logo) setHasLogo(true);
+              if (u.signature) setHasSignature(true);
+            }
+          })
+          .catch(() => {});
+      }
     }
-  }, [user, location.pathname]);
+  }, [user, location.pathname, isSuperAdmin]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -224,7 +225,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       localStorage.setItem(`profile_data_${formData.email.toLowerCase()}`, JSON.stringify(formData));
     }
 
-    const existingUser = JSON.parse(localStorage.getItem('user_info') || '{}');
+    const existingUser = (isSuperAdmin ? (getSuperAdminSession()?.user || {}) : (getTrustSession()?.user || {})) || {};
     const updatedUser = {
       ...existingUser,
       trustName: formData.name,
@@ -245,10 +246,17 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       logo: formData.logo || '',
       signature: formData.signature || '',
       signatoryName: formData.contactPerson || `${formData.firstName || ''} ${formData.surname || ''}`.trim() || '',
-      signatoryPan: formData.signatoryPan || formData.panNo || ''
+      signatoryPan: formData.signatoryPan || formData.panNo || '',
+      isSuperAdmin: isSuperAdmin,
+      role: isSuperAdmin ? 'SuperAdmin' : (existingUser.role || 'Admin')
     };
 
-    localStorage.setItem('user_info', JSON.stringify(updatedUser));
+    if (isSuperAdmin) {
+      setSuperAdminSession(updatedUser);
+    } else {
+      setTrustSession(updatedUser);
+    }
+
     if (onUpdateUser) {
       onUpdateUser(updatedUser);
     }
@@ -261,12 +269,13 @@ export default function EditProfilePage({ user, onUpdateUser }) {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedUser)
-        }).catch(err => console.warn('Sync profile error:', err));
+        }).catch(() => {});
       }
     } catch (e) {}
 
     setToastMessage('Profile updated successfully!');
     setTimeout(() => {
+      setToastMessage('');
       navigate(isSuperAdmin ? '/superadmin/my-profile' : '/trust/my-profile');
     }, 1200);
   };
@@ -293,7 +302,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
           <button
             type="button"
             className="mint-btn-add mint-btn-primary"
-            onClick={() => navigate('/trust/my-profile')}
+            onClick={() => navigate(isSuperAdmin ? '/superadmin/my-profile' : '/trust/my-profile')}
             title="View Profile"
           >
             <User size={16} />
@@ -309,6 +318,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
             {/* Left Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Name:</label>
                 <input
                   type="text"
                   name="name"
@@ -320,6 +330,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Email:</label>
                 <input
                   type="email"
                   name="email"
@@ -332,6 +343,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Phone:</label>
                 <input
                   type="text"
                   name="phone"
@@ -342,6 +354,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Address:</label>
                 <input
                   type="text"
                   name="address"
@@ -352,6 +365,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>State:</label>
                 <select
                   name="state"
                   className="form-control"
@@ -368,6 +382,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Registration No.:</label>
                 <input
                   type="text"
                   name="registrationNo"
@@ -378,6 +393,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>PAN No:</label>
                 <input
                   type="text"
                   name="panNo"
@@ -389,6 +405,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>FCRA Registration No.:</label>
                 <input
                   type="text"
                   name="fcraNo"
@@ -403,6 +420,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
             {/* Right Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Website:</label>
                 <input
                   type="text"
                   name="website"
@@ -413,6 +431,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Contact Person:</label>
                 <input
                   type="text"
                   name="contactPerson"
@@ -423,6 +442,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Contact Person Email:</label>
                 <input
                   type="email"
                   name="contactPersonEmail"
@@ -433,6 +453,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               </div>
 
               <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Contact Person Mobile No.:</label>
                 <input
                   type="text"
                   name="contactPersonMobile"
@@ -453,13 +474,14 @@ export default function EditProfilePage({ user, onUpdateUser }) {
                     style={{ marginLeft: '10px', fontSize: '12px' }}
                   />
                 </div>
-                <div style={{ fontSize: '11.5px', color: '#555', marginBottom: '10px' }}>
+                
+                {/* <div style={{ fontSize: '11.5px', color: '#555', marginBottom: '10px' }}>
                   ⓘ Your logo will be displayed as{' '}
                   <span style={{ color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' }}>
                     Our Esteemed Client
                   </span>{' '}
                   on our website
-                </div>
+                </div> */}
 
                 {Boolean(hasLogo && formData.logo) && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

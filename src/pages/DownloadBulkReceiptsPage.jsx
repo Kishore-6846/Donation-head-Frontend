@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
 import { Shield, Loader2, ArrowUpDown, Sparkles, List } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
-export default function DownloadBulkReceiptsPage() {
+export default function DownloadBulkReceiptsPage({ user }) {
   const navigate = useNavigate();
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +15,15 @@ export default function DownloadBulkReceiptsPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
+
+  const trustSession = getTrustSession();
+  const activeUser = (!isSuperUser(user) && user) || trustSession?.user || {};
+  const effectiveEmail = (activeUser?.email || '').trim();
+  const effectiveTrustName = (
+    (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') ||
+    (activeUser?.name && !isSuperUser(activeUser) ? activeUser.name : '') ||
+    ''
+  ).trim();
 
   const [popup, setPopup] = useState({
     isOpen: false,
@@ -26,17 +36,40 @@ export default function DownloadBulkReceiptsPage() {
   const [sortField, setSortField] = useState('receiptNo');
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
 
-  useEffect(() => {
-    fetchReceipts();
-  }, []);
-
   const fetchReceipts = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/receipts?status=Active&limit=500');
+      let url = '/api/receipts?status=Active&limit=500';
+      if (effectiveEmail) {
+        url += `&trustEmail=${encodeURIComponent(effectiveEmail)}`;
+      }
+      if (effectiveTrustName) {
+        url += `&trustName=${encodeURIComponent(effectiveTrustName)}`;
+      }
+
+      const headers = {};
+      if (trustSession?.token) {
+        headers['Authorization'] = `Bearer ${trustSession.token}`;
+      }
+
+      const res = await fetch(url, { headers });
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
-        setReceipts(data.data);
+        let list = data.data;
+        if (effectiveEmail || (effectiveTrustName && effectiveTrustName.toLowerCase() !== 'trust organization')) {
+          const eLower = effectiveEmail.toLowerCase();
+          const tLower = effectiveTrustName.toLowerCase();
+          list = list.filter(r => {
+            if (!r) return false;
+            const rEmail = (r.trustEmail || '').toLowerCase();
+            const rCreated = (r.createdBy || '').toLowerCase();
+            const rTrust = (r.trustName || '').toLowerCase();
+            const matchEmail = eLower && (rEmail === eLower || rCreated === eLower);
+            const matchTrust = tLower && tLower !== 'trust organization' && (rTrust === tLower);
+            return matchEmail || matchTrust;
+          });
+        }
+        setReceipts(list);
       }
     } catch (err) {
       console.error('Error fetching receipts:', err);
@@ -44,6 +77,10 @@ export default function DownloadBulkReceiptsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchReceipts();
+  }, [effectiveEmail, effectiveTrustName, user]);
 
   // Filter receipts by search term
   const filteredReceipts = useMemo(() => {
@@ -184,9 +221,14 @@ export default function DownloadBulkReceiptsPage() {
       const res = await fetch('/api/receipts/bulk-download', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(trustSession?.token ? { 'Authorization': `Bearer ${trustSession.token}` } : {})
         },
-        body: JSON.stringify({ ids: idsArray })
+        body: JSON.stringify({
+          ids: idsArray,
+          trustEmail: effectiveEmail,
+          trustName: effectiveTrustName
+        })
       });
 
       if (!res.ok) {
