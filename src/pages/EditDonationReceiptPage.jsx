@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
-import { Sparkles, List } from 'lucide-react';
+import { Sparkles, List, AlertCircle, Trash2 } from 'lucide-react';
 
 // Accurate Indian Numbering System to Words Converter
 function convertNumberToWords(num) {
@@ -104,6 +104,15 @@ export default function EditDonationReceiptPage({ user }) {
   const [receiptTypes, setReceiptTypes] = useState(['Corpus', 'Voluntary', 'Earmarked Fund']);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Field validation errors state
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  // File Upload Refs & States
+  const panInputRef = useRef(null);
+  const aadhaarInputRef = useRef(null);
+  const [panPreview, setPanPreview] = useState(initialReceipt?.panDoc || null);
+  const [aadhaarPreview, setAadhaarPreview] = useState(initialReceipt?.aadhaarDoc || null);
+
   const [formData, setFormData] = useState({
     name: initialReceipt?.donorName || '',
     receiptDate: formatToISODate(initialReceipt?.receiptDate || new Date()),
@@ -123,8 +132,10 @@ export default function EditDonationReceiptPage({ user }) {
     notes: initialReceipt?.notes || '',
     attach80g: initialReceipt?.attach80g ? 'Yes' : 'No',
     attachVerification: initialReceipt?.attachVerification !== false ? 'Yes' : 'No',
-    panFileName: '',
-    aadhaarFileName: ''
+    panFileName: initialReceipt?.panFileName || '',
+    aadhaarFileName: initialReceipt?.aadhaarFileName || '',
+    panDoc: initialReceipt?.panDoc || '',
+    aadhaarDoc: initialReceipt?.aadhaarDoc || ''
   });
 
   const [popup, setPopup] = useState({
@@ -134,6 +145,16 @@ export default function EditDonationReceiptPage({ user }) {
     message: '',
     onConfirm: null
   });
+
+  const clearFieldError = (fieldName) => {
+    if (fieldErrors[fieldName]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[fieldName];
+        return next;
+      });
+    }
+  };
 
   // Fetch donation heads & receipt data if needed
   useEffect(() => {
@@ -206,8 +227,14 @@ export default function EditDonationReceiptPage({ user }) {
               reference: r.reference || '',
               notes: r.notes || '',
               attach80g: r.attach80g ? 'Yes' : 'No',
-              attachVerification: r.attachVerification !== false ? 'Yes' : 'No'
+              attachVerification: r.attachVerification !== false ? 'Yes' : 'No',
+              panFileName: r.panFileName || '',
+              aadhaarFileName: r.aadhaarFileName || '',
+              panDoc: r.panDoc || '',
+              aadhaarDoc: r.aadhaarDoc || ''
             }));
+            if (r.panDoc) setPanPreview(r.panDoc);
+            if (r.aadhaarDoc) setAadhaarPreview(r.aadhaarDoc);
           }
         })
         .catch(console.error);
@@ -216,29 +243,96 @@ export default function EditDonationReceiptPage({ user }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    clearFieldError(name);
+
+    if (name === 'address') {
+      // Don't allow special characters in address
+      const cleanAddress = value.replace(/[^a-zA-Z0-9\s]/g, '');
+      setFormData(prev => ({ ...prev, address: cleanAddress }));
+      return;
+    }
+
     if (name === 'mobile') {
-      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      // Don't allow special characters or letters, only numbers, max 10 digits, starts with 6,7,8,9
+      let numericVal = value.replace(/\D/g, '').slice(0, 10);
+      if (numericVal.length > 0 && !/^[6-9]/.test(numericVal)) {
+        numericVal = numericVal.replace(/^[^6-9]+/, '');
+      }
       setFormData(prev => ({ ...prev, mobile: numericVal }));
       return;
     }
+
+    if (name === 'panNo') {
+      // Don't allow special characters, uppercase alphanumeric only, max 10
+      const cleanPan = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, panNo: cleanPan }));
+      return;
+    }
+
+    if (name === 'aadhaarNo') {
+      // Don't allow special characters or letters, only digits, max 12
+      const cleanAadhaar = value.replace(/\D/g, '').slice(0, 12);
+      setFormData(prev => ({ ...prev, aadhaarNo: cleanAadhaar }));
+      return;
+    }
+
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e, field) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setPopup({
-          isOpen: true,
-          type: 'error',
-          title: 'File Too Large',
-          message: 'Selected file exceeds maximum allowed size of 2MB.',
-          onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
-        });
-        e.target.value = '';
-        return;
+  const handleFileChange = (e, fieldType) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!allowedTypes.includes(file.type) && !allowedExts.includes(fileExt)) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [fieldType]: 'Only image files (.jpg, .jpeg, .png, .webp) are allowed.'
+      }));
+      if (fieldType === 'panFile' && panInputRef.current) panInputRef.current.value = '';
+      if (fieldType === 'aadhaarFile' && aadhaarInputRef.current) aadhaarInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [fieldType]: 'File size must not exceed 2MB.'
+      }));
+      if (fieldType === 'panFile' && panInputRef.current) panInputRef.current.value = '';
+      if (fieldType === 'aadhaarFile' && aadhaarInputRef.current) aadhaarInputRef.current.value = '';
+      return;
+    }
+
+    clearFieldError(fieldType);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (fieldType === 'panFile') {
+        setPanPreview(ev.target.result);
+        setFormData(prev => ({ ...prev, panFileName: file.name, panDoc: ev.target.result }));
+      } else {
+        setAadhaarPreview(ev.target.result);
+        setFormData(prev => ({ ...prev, aadhaarFileName: file.name, aadhaarDoc: ev.target.result }));
       }
-      setFormData(prev => ({ ...prev, [field]: file.name }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveFile = (fieldType) => {
+    if (fieldType === 'panFile') {
+      setPanPreview(null);
+      setFormData(prev => ({ ...prev, panFileName: '', panDoc: '' }));
+      clearFieldError('panFile');
+      if (panInputRef.current) panInputRef.current.value = '';
+    } else {
+      setAadhaarPreview(null);
+      setFormData(prev => ({ ...prev, aadhaarFileName: '', aadhaarDoc: '' }));
+      clearFieldError('aadhaarFile');
+      if (aadhaarInputRef.current) aadhaarInputRef.current.value = '';
     }
   };
 
@@ -247,47 +341,42 @@ export default function EditDonationReceiptPage({ user }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const errors = {};
+
     if (!formData.reasonToEdit.trim()) {
-      setPopup({
-        isOpen: true,
-        type: 'error',
-        title: 'Missing Required Field',
-        message: 'Please enter the Reason to edit.',
-        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
-      });
-      return;
+      errors.reasonToEdit = 'Please enter the Reason to edit.';
     }
 
-    if (formData.mobile && formData.mobile.length !== 10) {
-      setPopup({
-        isOpen: true,
-        type: 'error',
-        title: 'Invalid Mobile Number',
-        message: 'Mobile number must be exactly 10 digits.',
-        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
-      });
-      return;
+    if (formData.mobile) {
+      if (formData.mobile.length !== 10) {
+        errors.mobile = 'Mobile number must be exactly 10 digits.';
+      } else if (!/^[6-9]\d{9}$/.test(formData.mobile)) {
+        errors.mobile = 'Mobile number must start with 6, 7, 8, or 9.';
+      }
     }
 
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      setPopup({
-        isOpen: true,
-        type: 'error',
-        title: 'Invalid Email Address',
-        message: 'Please enter a valid email address (e.g. donor@example.com).',
-        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
-      });
-      return;
+      errors.email = 'Please enter a valid email address (e.g. donor@example.com).';
+    }
+
+    if (formData.panNo && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNo.trim())) {
+      errors.panNo = 'Please enter a valid 10-character PAN number (e.g. ABCDE1234F).';
+    }
+
+    if (formData.aadhaarNo && formData.aadhaarNo.length !== 12) {
+      errors.aadhaarNo = 'Aadhaar number must be exactly 12 digits.';
+    }
+
+    if (!formData.donationHead) {
+      errors.donationHead = 'Please select a Donation Head.';
     }
 
     if (!formData.amount || Number(formData.amount) <= 0) {
-      setPopup({
-        isOpen: true,
-        type: 'error',
-        title: 'Invalid Amount',
-        message: 'Please enter a valid donation Amount.',
-        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
-      });
+      errors.amount = 'Please enter a valid donation Amount.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
@@ -312,7 +401,11 @@ export default function EditDonationReceiptPage({ user }) {
         notes: formData.notes.trim(),
         reasonToEdit: formData.reasonToEdit.trim(),
         attach80g: formData.attach80g === 'Yes',
-        attachVerification: formData.attachVerification === 'Yes'
+        attachVerification: formData.attachVerification === 'Yes',
+        panFileName: formData.panFileName || '',
+        aadhaarFileName: formData.aadhaarFileName || '',
+        panDoc: formData.panDoc || '',
+        aadhaarDoc: formData.aadhaarDoc || ''
       };
 
       const res = await fetch(`/api/receipts/${receiptId}`, {
@@ -375,6 +468,38 @@ export default function EditDonationReceiptPage({ user }) {
     cursor: 'not-allowed'
   };
 
+  const getFieldStyle = (fieldName, extraStyle = {}) => {
+    const hasErr = Boolean(fieldErrors[fieldName]);
+    return {
+      ...inputStyle,
+      border: hasErr ? '1.5px solid #ef4444' : (inputStyle.border || '1px solid #ced4da'),
+      backgroundColor: hasErr ? '#fef2f2' : (inputStyle.backgroundColor || '#ffffff'),
+      boxShadow: hasErr ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+      transition: 'border-color 0.2s, background-color 0.2s, box-shadow 0.2s',
+      ...extraStyle
+    };
+  };
+
+  const renderFieldError = (fieldName) => {
+    if (!fieldErrors[fieldName]) return null;
+    return (
+      <div
+        style={{
+          color: '#ef4444',
+          fontSize: '12px',
+          marginTop: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          fontWeight: '500'
+        }}
+      >
+        <AlertCircle size={13} style={{ flexShrink: 0 }} />
+        <span>{fieldErrors[fieldName]}</span>
+      </div>
+    );
+  };
+
   return (
     <>
       {/* Mint Hero Banner */}
@@ -403,7 +528,7 @@ export default function EditDonationReceiptPage({ user }) {
       </div>
 
       <div className="mint-table-card-container">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           {/* ================= ROW 1: 5 Columns (Receipt No, Name, Receipt Date, Full Address, Mobile) ================= */}
           <div className="receipt-form-row-5col">
             {/* 1. Receipt No. */}
@@ -444,15 +569,15 @@ export default function EditDonationReceiptPage({ user }) {
                 name="receiptDate"
                 value={formData.receiptDate}
                 onChange={handleChange}
-                required
-                style={inputStyle}
+                style={getFieldStyle('receiptDate')}
               />
+              {renderFieldError('receiptDate')}
             </div>
 
             {/* 4. Full Address */}
             <div>
               <label style={labelStyle}>
-                Full Address(Max 75 Characters)
+                Full Address
               </label>
               <input
                 type="text"
@@ -461,8 +586,9 @@ export default function EditDonationReceiptPage({ user }) {
                 value={formData.address}
                 onChange={handleChange}
                 placeholder="Enter Full Address"
-                style={inputStyle}
+                style={getFieldStyle('address')}
               />
+              {renderFieldError('address')}
             </div>
 
             {/* 5. Mobile */}
@@ -478,8 +604,9 @@ export default function EditDonationReceiptPage({ user }) {
                 value={formData.mobile}
                 onChange={handleChange}
                 placeholder="10-digit mobile number"
-                style={inputStyle}
+                style={getFieldStyle('mobile')}
               />
+              {renderFieldError('mobile')}
             </div>
           </div>
 
@@ -496,8 +623,9 @@ export default function EditDonationReceiptPage({ user }) {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="Enter Email"
-                style={inputStyle}
+                style={getFieldStyle('email')}
               />
+              {renderFieldError('email')}
             </div>
 
             {/* 2. PAN Number */}
@@ -512,8 +640,9 @@ export default function EditDonationReceiptPage({ user }) {
                 value={formData.panNo}
                 onChange={handleChange}
                 placeholder="Enter PAN"
-                style={{ ...inputStyle, textTransform: 'uppercase' }}
+                style={getFieldStyle('panNo', { textTransform: 'uppercase' })}
               />
+              {renderFieldError('panNo')}
             </div>
 
             {/* 3. Aadhaar No. */}
@@ -524,12 +653,14 @@ export default function EditDonationReceiptPage({ user }) {
               <input
                 type="text"
                 name="aadhaarNo"
-                maxLength={14}
+                maxLength={12}
+                inputMode="numeric"
                 value={formData.aadhaarNo}
                 onChange={handleChange}
-                placeholder="Enter Aadhaar N"
-                style={inputStyle}
+                placeholder="12-digit Aadhaar No."
+                style={getFieldStyle('aadhaarNo')}
               />
+              {renderFieldError('aadhaarNo')}
             </div>
 
             {/* 4. Donation Type */}
@@ -563,8 +694,7 @@ export default function EditDonationReceiptPage({ user }) {
                 name="donationHead"
                 value={formData.donationHead}
                 onChange={handleChange}
-                required
-                style={{ ...inputStyle, cursor: 'pointer' }}
+                style={getFieldStyle('donationHead', { cursor: 'pointer' })}
               >
                 <option value="">Select Donation Head</option>
                 {heads.map(h => (
@@ -574,6 +704,7 @@ export default function EditDonationReceiptPage({ user }) {
                 ))}
                 {!heads.some(h => h.name === 'Kind') && <option value="Kind">Kind</option>}
               </select>
+              {renderFieldError('donationHead')}
             </div>
           </div>
 
@@ -589,12 +720,12 @@ export default function EditDonationReceiptPage({ user }) {
                 name="amount"
                 value={formData.amount}
                 onChange={handleChange}
-                required
-                style={inputStyle}
+                style={getFieldStyle('amount')}
               />
+              {renderFieldError('amount')}
             </div>
 
-            {/* 2. Donation Date (Readonly in Screenshot) */}
+            {/* 2. Donation Date */}
             <div>
               <label style={labelStyle}>
                 Donation Date <span style={{ color: '#dc3545' }}>*</span>
@@ -618,7 +749,7 @@ export default function EditDonationReceiptPage({ user }) {
                 name="paymentMode"
                 value={formData.paymentMode}
                 onChange={handleChange}
-                style={{ ...inputStyle, cursor: 'pointer' }}
+                style={getFieldStyle('paymentMode', { cursor: 'pointer' })}
               >
                 <option value="Cheque">Cheque</option>
                 <option value="Online / UPI">Online / UPI</option>
@@ -640,7 +771,7 @@ export default function EditDonationReceiptPage({ user }) {
                 value={formData.paymentDetails}
                 onChange={handleChange}
                 placeholder="Enter Payment Details"
-                style={inputStyle}
+                style={getFieldStyle('paymentDetails')}
               />
             </div>
 
@@ -655,43 +786,117 @@ export default function EditDonationReceiptPage({ user }) {
                 value={formData.reference}
                 onChange={handleChange}
                 placeholder="Donor Reference"
-                style={inputStyle}
+                style={getFieldStyle('reference')}
               />
             </div>
           </div>
 
-          {/* ================= ROW 4: Upload PAN, Upload Aadhaar, Reason to edit (Spans 3 cols) ================= */}
+          {/* ================= ROW 4: Upload PAN, Upload Aadhaar, Reason to edit ================= */}
           <div className="receipt-form-row-4">
             {/* 1. Upload PAN */}
             <div>
               <label style={labelStyle}>
-                Upload PAN (jpg, png, Max 2MB)
+                Upload PAN <span style={{ fontSize: '12px', fontWeight: '400', color: '#64748b' }}>(.jpg, .png, Max 2MB)</span>
               </label>
-              <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
-                {formData.panFileName || 'Image not found'}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <input
+                  type="file"
+                  ref={panInputRef}
+                  accept="image/png, image/jpeg, image/jpg, image/webp"
+                  onChange={(e) => handleFileChange(e, 'panFile')}
+                  style={getFieldStyle('panFile', {
+                    padding: '5px 8px',
+                    height: '36px',
+                    cursor: 'pointer'
+                  })}
+                />
+                {panPreview && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                      <img src={panPreview} alt="PAN preview" style={{ height: '24px', width: '24px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0 }} />
+                      <span style={{ fontSize: '11.5px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={formData.panFileName || 'PAN Image'}>
+                        {formData.panFileName || 'PAN Image'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile('panFile')}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        backgroundColor: '#fee2e2',
+                        color: '#dc2626',
+                        border: '1px solid #fca5a5',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        flexShrink: 0
+                      }}
+                      title="Remove PAN"
+                    >
+                      <Trash2 size={11} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                )}
               </div>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png"
-                onChange={(e) => handleFileChange(e, 'panFileName')}
-                style={{ fontSize: '13px' }}
-              />
+              {renderFieldError('panFile')}
             </div>
 
             {/* 2. Upload Aadhaar */}
             <div>
               <label style={labelStyle}>
-                Upload Aadhaar (jpg, png, Max 2MB)
+                Upload Aadhaar <span style={{ fontSize: '12px', fontWeight: '400', color: '#64748b' }}>(.jpg, .png, Max 2MB)</span>
               </label>
-              <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
-                {formData.aadhaarFileName || 'Image not found'}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <input
+                  type="file"
+                  ref={aadhaarInputRef}
+                  accept="image/png, image/jpeg, image/jpg, image/webp"
+                  onChange={(e) => handleFileChange(e, 'aadhaarFile')}
+                  style={getFieldStyle('aadhaarFile', {
+                    padding: '5px 8px',
+                    height: '36px',
+                    cursor: 'pointer'
+                  })}
+                />
+                {aadhaarPreview && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                      <img src={aadhaarPreview} alt="Aadhaar preview" style={{ height: '24px', width: '24px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0 }} />
+                      <span style={{ fontSize: '11.5px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={formData.aadhaarFileName || 'Aadhaar Image'}>
+                        {formData.aadhaarFileName || 'Aadhaar Image'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile('aadhaarFile')}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        backgroundColor: '#fee2e2',
+                        color: '#dc2626',
+                        border: '1px solid #fca5a5',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        flexShrink: 0
+                      }}
+                      title="Remove Aadhaar"
+                    >
+                      <Trash2 size={11} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                )}
               </div>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png"
-                onChange={(e) => handleFileChange(e, 'aadhaarFileName')}
-                style={{ fontSize: '13px' }}
-              />
+              {renderFieldError('aadhaarFile')}
             </div>
 
             {/* 3. Reason to edit (Required) */}
@@ -705,9 +910,9 @@ export default function EditDonationReceiptPage({ user }) {
                 value={formData.reasonToEdit}
                 onChange={handleChange}
                 placeholder="Add reason to edit"
-                required
-                style={inputStyle}
+                style={getFieldStyle('reasonToEdit')}
               />
+              {renderFieldError('reasonToEdit')}
             </div>
           </div>
 
@@ -736,7 +941,7 @@ export default function EditDonationReceiptPage({ user }) {
               value={formData.notes}
               onChange={handleChange}
               placeholder="Enter Additional Notes (optional)"
-              style={inputStyle}
+              style={getFieldStyle('notes')}
             />
           </div>
 
@@ -755,6 +960,7 @@ export default function EditDonationReceiptPage({ user }) {
                     value="Yes"
                     checked={formData.attach80g === 'Yes'}
                     onChange={handleChange}
+                    style={{ accentColor: '#007bff' }}
                   />
                   Yes
                 </label>
@@ -765,6 +971,7 @@ export default function EditDonationReceiptPage({ user }) {
                     value="No"
                     checked={formData.attach80g === 'No'}
                     onChange={handleChange}
+                    style={{ accentColor: '#007bff' }}
                   />
                   No
                 </label>
@@ -798,6 +1005,7 @@ export default function EditDonationReceiptPage({ user }) {
                     value="Yes"
                     checked={formData.attachVerification === 'Yes'}
                     onChange={handleChange}
+                    style={{ accentColor: '#007bff' }}
                   />
                   Yes
                 </label>
@@ -808,6 +1016,7 @@ export default function EditDonationReceiptPage({ user }) {
                     value="No"
                     checked={formData.attachVerification === 'No'}
                     onChange={handleChange}
+                    style={{ accentColor: '#007bff' }}
                   />
                   No
                 </label>
@@ -838,6 +1047,7 @@ export default function EditDonationReceiptPage({ user }) {
         title={popup.title}
         message={popup.message}
         onConfirm={popup.onConfirm}
+        onCancel={() => setPopup(p => ({ ...p, isOpen: false }))}
       />
     </>
   );

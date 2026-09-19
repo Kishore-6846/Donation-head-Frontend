@@ -64,7 +64,6 @@ import CustomReportsAdminPage from './pages/CustomReportsAdminPage';
 import DynamicReportViewerPage from './pages/DynamicReportViewerPage';
 import TrustNotificationsPage from './pages/TrustNotificationsPage';
 import SuperAdminLoginPage from './pages/SuperAdminLoginPage';
-import SuperAdminRegisterPage from './pages/SuperAdminRegisterPage';
 import TrustDetailsViewPage from './pages/TrustDetailsViewPage';
 import {
   getSuperAdminSession,
@@ -73,6 +72,7 @@ import {
   setTrustSession,
   clearSuperAdminSession,
   clearTrustSession,
+  clearCurrentTabSessions,
   isSuperAdminPath,
   isSuperUser
 } from './utils/authStorage';
@@ -213,20 +213,24 @@ function AppContent() {
     if (isSuperAdminRoute) {
       clearSuperAdminSession();
       setSuperAdminUser(null);
+      setTrustUser(null);
       navigate('/superadmin/login', { replace: true });
     } else {
       clearTrustSession();
       setTrustUser(null);
+      setSuperAdminUser(null);
       navigate('/trust/login', { replace: true });
     }
   };
 
   const handleSuperAdminLoginSuccess = (userData) => {
     setSuperAdminUser(userData);
+    setTrustUser(null);
   };
 
   const handleTrustLoginSuccess = (userData) => {
     setTrustUser(userData);
+    setSuperAdminUser(null);
   };
 
   const handleUpdateUser = (updatedUserData) => {
@@ -320,7 +324,7 @@ function AppContent() {
             {/* Public Super Admin Auth Routes */}
             <Route
               path="/superadmin/login"
-              element={superAdminUser ? <Navigate to="/superadmin" replace /> : <SuperAdminLoginPage onLoginSuccess={handleSuperAdminLoginSuccess} />}
+              element={<SuperAdminLoginPage onLoginSuccess={handleSuperAdminLoginSuccess} />}
             />
             <Route
               path="/superAdmin/login"
@@ -335,43 +339,44 @@ function AppContent() {
               element={<Navigate to="/superadmin/login" replace />}
             />
 
+            {/* Super Admin Registration is removed - redirect all registration endpoints to login */}
             <Route
               path="/superadmin/register"
-              element={superAdminUser ? <Navigate to="/superadmin" replace /> : <SuperAdminRegisterPage onLoginSuccess={handleSuperAdminLoginSuccess} />}
+              element={<Navigate to="/superadmin/login" replace />}
             />
             <Route
               path="/superAdmin/register"
-              element={<Navigate to="/superadmin/register" replace />}
+              element={<Navigate to="/superadmin/login" replace />}
             />
             <Route
               path="/superadmin/signup"
-              element={<Navigate to="/superadmin/register" replace />}
+              element={<Navigate to="/superadmin/login" replace />}
             />
             <Route
               path="/superAdmin/signup"
-              element={<Navigate to="/superadmin/register" replace />}
+              element={<Navigate to="/superadmin/login" replace />}
             />
             <Route
               path="/superadmin/registration"
-              element={<Navigate to="/superadmin/register" replace />}
+              element={<Navigate to="/superadmin/login" replace />}
             />
             <Route
               path="/superAdmin/registration"
-              element={<Navigate to="/superadmin/register" replace />}
+              element={<Navigate to="/superadmin/login" replace />}
             />
             <Route
               path="/superadmin/register.php"
-              element={<Navigate to="/superadmin/register" replace />}
+              element={<Navigate to="/superadmin/login" replace />}
             />
             <Route
               path="/superAdmin/register.php"
-              element={<Navigate to="/superadmin/register" replace />}
+              element={<Navigate to="/superadmin/login" replace />}
             />
 
-            {/* Public Login Routes: If already authenticated as Trust Admin, redirect to /trust */}
+            {/* Public Login Routes */}
             <Route
               path="/trust/login"
-              element={trustUser ? <Navigate to="/trust" replace /> : <LoginPage onLoginSuccess={handleTrustLoginSuccess} />}
+              element={<LoginPage onLoginSuccess={handleTrustLoginSuccess} />}
             />
             <Route
               path="/trust/login.php"
@@ -379,7 +384,7 @@ function AppContent() {
             />
             <Route
               path="/login"
-              element={trustUser ? <Navigate to="/trust" replace /> : <LoginPage onLoginSuccess={handleTrustLoginSuccess} />}
+              element={<LoginPage onLoginSuccess={handleTrustLoginSuccess} />}
             />
             <Route
               path="/login.php"

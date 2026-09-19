@@ -76,8 +76,21 @@ export default function NewUserPage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'mobile') {
-      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      let numericVal = value.replace(/\D/g, '').slice(0, 10);
+      if (numericVal.length > 0 && !/^[6-9]/.test(numericVal)) {
+        numericVal = numericVal.replace(/^[^6-9]+/, '');
+      }
       setFormData(prev => ({ ...prev, mobile: numericVal }));
+      return;
+    }
+    if (name === 'panNo') {
+      const cleanPan = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, panNo: cleanPan }));
+      return;
+    }
+    if (name === 'contactPerson') {
+      const cleanName = value.replace(/[^a-zA-Z\s]/g, '');
+      setFormData(prev => ({ ...prev, contactPerson: cleanName }));
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -107,12 +120,34 @@ export default function NewUserPage() {
       return;
     }
 
-    if (formData.mobile && formData.mobile.length !== 10) {
+    if (formData.mobile && !/^[6-9]\d{9}$/.test(formData.mobile)) {
       setPopup({
         isOpen: true,
         type: 'error',
         title: 'Invalid Mobile Number',
-        message: 'Mobile number must be exactly 10 digits.',
+        message: 'Mobile number must be a valid 10-digit number starting with 6, 7, 8, or 9.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (formData.contactPerson && !/^[a-zA-Z\s]+$/.test(formData.contactPerson.trim())) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Contact Person Name',
+        message: 'Contact Person name must contain only letters and spaces.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (formData.panNo && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNo.trim())) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid PAN Number',
+        message: 'Please enter a valid 10-character PAN number without special characters (e.g. ABCDE1234F).',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
       });
       return;

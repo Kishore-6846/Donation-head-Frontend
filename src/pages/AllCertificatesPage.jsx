@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SimplePopup from '../components/SimplePopup';
 import { Plus, Pencil, Trash2, X, Sparkles } from 'lucide-react';
@@ -24,6 +24,34 @@ export default function AllCertificatesPage({ user }) {
     ] : [];
   });
 
+  useEffect(() => {
+    const fetchCerts = async () => {
+      try {
+        const emailParam = user?.email ? `?trustEmail=${encodeURIComponent(user.email)}` : '';
+        const res = await fetch(`/api/certificates${emailParam}`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setCertificates(data.data);
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(data.data));
+          } catch (lsErr) {
+            const lightweightList = data.data.map(c => ({
+              ...c,
+              page1: c.page1 ? 'uploaded_page1' : '',
+              page2: c.page2 ? 'uploaded_page2' : ''
+            }));
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(lightweightList));
+            } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.warn('Error loading certificates from backend:', err);
+      }
+    };
+    fetchCerts();
+  }, [user?.email, storageKey]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [previewCert, setPreviewCert] = useState(null);
@@ -40,18 +68,50 @@ export default function AllCertificatesPage({ user }) {
     onCancel: null
   });
 
-  const handleDelete = (id, regNo) => {
+  const handleDelete = (targetId, regNo, certObj) => {
+    const effectiveId = targetId || certObj?._id || certObj?.id;
+    const effectiveRegNo = regNo || certObj?.regNo;
+
     setPopup({
       isOpen: true,
       type: 'confirm',
       title: 'Delete Certificate?',
-      message: `Are you sure you want to delete certificate "${regNo}"? This action cannot be undone.`,
+      message: `Are you sure you want to delete certificate "${effectiveRegNo || 'Selected'}"? This action cannot be undone.`,
       confirmText: 'Delete',
       cancelText: 'Cancel',
-      onConfirm: () => {
-        const updated = certificates.filter(c => c.id !== id);
+      onConfirm: async () => {
+        try {
+          if (effectiveId) {
+            await fetch(`/api/certificates/${effectiveId}?regNo=${encodeURIComponent(effectiveRegNo || '')}`, { method: 'DELETE' });
+          } else if (effectiveRegNo) {
+            await fetch(`/api/certificates?regNo=${encodeURIComponent(effectiveRegNo)}`, { method: 'DELETE' });
+          }
+        } catch (e) {
+          console.warn('API delete error:', e);
+        }
+
+        const updated = certificates.filter(c => {
+          const cId = c._id || c.id;
+          const matchId = effectiveId && (String(cId) === String(effectiveId) || String(c.id) === String(effectiveId) || String(c._id) === String(effectiveId));
+          const matchReg = effectiveRegNo && String(c.regNo).toLowerCase() === String(effectiveRegNo).toLowerCase();
+          return !matchId && !matchReg;
+        });
+
         setCertificates(updated);
-        localStorage.setItem(storageKey, JSON.stringify(updated));
+
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+        } catch (lsErr) {
+          const lightweightList = updated.map(c => ({
+            ...c,
+            page1: c.page1 ? 'uploaded_page1' : '',
+            page2: c.page2 ? 'uploaded_page2' : ''
+          }));
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(lightweightList));
+          } catch (e) {}
+        }
+
         setPopup(p => ({ ...p, isOpen: false }));
       },
       onCancel: () => setPopup(p => ({ ...p, isOpen: false }))
@@ -278,7 +338,7 @@ export default function AllCertificatesPage({ user }) {
                       </button>
                       {/* Delete button */}
                       <button
-                        onClick={() => handleDelete(cert.id, cert.regNo)}
+                        onClick={() => handleDelete(cert._id || cert.id, cert.regNo, cert)}
                         style={{
                           backgroundColor: '#fef2f2',
                           border: '1px solid #fee2e2',
@@ -386,24 +446,39 @@ export default function AllCertificatesPage({ user }) {
               </button>
             </div>
 
-            <div style={{ border: '2px solid #2e7d32', padding: '24px', background: '#fafdfa', borderRadius: '6px' }}>
-              <div style={{ textAlign: 'center', borderBottom: '2px solid #2e7d32', paddingBottom: '14px', marginBottom: '18px' }}>
-                <h4 style={{ margin: '0 0 4px 0', fontSize: '17px', color: '#1b5e20', fontWeight: '800' }}>
-                  GOVERNMENT OF INDIA &mdash; INCOME TAX DEPARTMENT
-                </h4>
-                <p style={{ margin: 0, fontSize: '12px', color: '#555' }}>
-                  Order for approval under clause (iv) of first proviso to sub-section (5) of section 80G
-                </p>
-              </div>
-              <div style={{ fontSize: '13px', lineHeight: '1.8', color: '#222' }}>
-                <p><strong>Trust Name:</strong> {user?.trustName || 'Trust Organization'}</p>
-                <p><strong>Registration Number (URN):</strong> {previewCert.regNo}</p>
-                <p><strong>PAN:</strong> {user?.panNo || 'N/A'}</p>
-                <p><strong>Approval Valid From:</strong> {previewCert.validFrom} <strong>To:</strong> {previewCert.validUpto}</p>
-                <p style={{ marginTop: '14px', fontSize: '12px', color: '#555' }}>
-                  This document serves as statutory verification that donations made to this trust are eligible for tax deduction under Section 80G of the Income Tax Act, 1961.
-                </p>
-              </div>
+            <div style={{ border: '2px solid #2e7d32', padding: '20px', background: '#fafdfa', borderRadius: '6px', textAlign: 'center' }}>
+              {(previewPage === 1 ? previewCert.page1 : previewCert.page2) ? (
+                <div>
+                  <img
+                    src={previewPage === 1 ? previewCert.page1 : previewCert.page2}
+                    alt={`80G Certificate Page ${previewPage}`}
+                    style={{ maxWidth: '100%', maxHeight: '480px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #ddd' }}
+                  />
+                  <div style={{ marginTop: '10px', fontSize: '13px', color: '#555' }}>
+                    <strong>Reg No:</strong> {previewCert.regNo} | <strong>Valid:</strong> {previewCert.validFrom || 'N/A'} to {previewCert.validUpto || 'N/A'}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ textAlign: 'center', borderBottom: '2px solid #2e7d32', paddingBottom: '14px', marginBottom: '18px' }}>
+                    <h4 style={{ margin: '0 0 4px 0', fontSize: '17px', color: '#1b5e20', fontWeight: '800' }}>
+                      GOVERNMENT OF INDIA &mdash; INCOME TAX DEPARTMENT
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#555' }}>
+                      Order for approval under clause (iv) of first proviso to sub-section (5) of section 80G
+                    </p>
+                  </div>
+                  <div style={{ fontSize: '13px', lineHeight: '1.8', color: '#222', textAlign: 'left' }}>
+                    <p><strong>Trust Name:</strong> {user?.trustName || 'Trust Organization'}</p>
+                    <p><strong>Registration Number (URN):</strong> {previewCert.regNo}</p>
+                    <p><strong>PAN:</strong> {user?.panNo || 'N/A'}</p>
+                    <p><strong>Approval Valid From:</strong> {previewCert.validFrom || 'N/A'} <strong>To:</strong> {previewCert.validUpto || 'N/A'}</p>
+                    <p style={{ marginTop: '14px', fontSize: '12px', color: '#555' }}>
+                      This document serves as statutory verification that donations made to this trust are eligible for tax deduction under Section 80G of the Income Tax Act, 1961.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

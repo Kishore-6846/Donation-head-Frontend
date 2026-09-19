@@ -56,20 +56,9 @@ function safeParse(str) {
 
 export function getSuperAdminSession() {
   try {
-    // 1. Check tab-isolated sessionStorage first
-    let user = safeParse(sessionStorage.getItem(SUPERADMIN_USER_KEY));
-    let token = sessionStorage.getItem(SUPERADMIN_TOKEN_KEY);
-
-    // 2. Check localStorage if not in sessionStorage
-    if (!user) {
-      user = safeParse(localStorage.getItem(SUPERADMIN_USER_KEY));
-      token = localStorage.getItem(SUPERADMIN_TOKEN_KEY);
-      if (user && isSuperUser(user)) {
-        // Sync to sessionStorage for this tab
-        sessionStorage.setItem(SUPERADMIN_USER_KEY, JSON.stringify(user));
-        if (token) sessionStorage.setItem(SUPERADMIN_TOKEN_KEY, token);
-      }
-    }
+    // Tab-isolated sessionStorage ONLY: ensures one tab never inherits another tab's session
+    const user = safeParse(sessionStorage.getItem(SUPERADMIN_USER_KEY));
+    const token = sessionStorage.getItem(SUPERADMIN_TOKEN_KEY);
 
     if (user && isSuperUser(user)) {
       return { user, token: token || '' };
@@ -93,20 +82,22 @@ export function setSuperAdminSession(user, token = '') {
   const userStr = JSON.stringify(superUser);
 
   try {
-    // Save to tab-specific sessionStorage
+    // Isolate this tab strictly for Super Admin
     sessionStorage.setItem(SUPERADMIN_USER_KEY, userStr);
     if (token) sessionStorage.setItem(SUPERADMIN_TOKEN_KEY, token);
 
-    // Save to localStorage for persistence across browser restarts
-    localStorage.setItem(SUPERADMIN_USER_KEY, userStr);
-    if (token) localStorage.setItem(SUPERADMIN_TOKEN_KEY, token);
+    // Clear any Trust session lingering in this tab
+    sessionStorage.removeItem(TRUST_USER_KEY);
+    sessionStorage.removeItem(TRUST_TOKEN_KEY);
 
+    // Save profile cache
     if (superUser.email) {
       localStorage.setItem(`profile_data_${superUser.email.toLowerCase()}`, userStr);
     }
 
-    // Dispatch custom event for reactive in-tab updates
+    // Dispatch events for in-tab reactivity
     window.dispatchEvent(new CustomEvent('superadmin-session-change', { detail: superUser }));
+    window.dispatchEvent(new CustomEvent('trust-session-change', { detail: null }));
   } catch (e) {
     console.error('Error setting superadmin session:', e);
   }
@@ -131,21 +122,9 @@ export function clearSuperAdminSession() {
 
 export function getTrustSession() {
   try {
-    // 1. Check tab-isolated sessionStorage first
-    let user = safeParse(sessionStorage.getItem(TRUST_USER_KEY));
-    let token = sessionStorage.getItem(TRUST_TOKEN_KEY);
-
-    // 2. Check localStorage trust key
-    if (!user) {
-      const localTrust = safeParse(localStorage.getItem(TRUST_USER_KEY));
-      if (localTrust && !isSuperUser(localTrust)) {
-        user = localTrust;
-        token = localStorage.getItem(TRUST_TOKEN_KEY);
-        // Sync to this tab's sessionStorage
-        sessionStorage.setItem(TRUST_USER_KEY, JSON.stringify(user));
-        if (token) sessionStorage.setItem(TRUST_TOKEN_KEY, token);
-      }
-    }
+    // Tab-isolated sessionStorage ONLY: ensures one tab never inherits another tab's session
+    const user = safeParse(sessionStorage.getItem(TRUST_USER_KEY));
+    const token = sessionStorage.getItem(TRUST_TOKEN_KEY);
 
     // STRICT CHECK: Reject any Super Admin object from being returned as a Trust user
     if (user && !isSuperUser(user)) {
@@ -169,19 +148,22 @@ export function setTrustSession(user, token = '') {
   const userStr = JSON.stringify(user);
 
   try {
-    // Save to tab-specific sessionStorage
+    // Isolate this tab strictly for Trust Admin
     sessionStorage.setItem(TRUST_USER_KEY, userStr);
     if (token) sessionStorage.setItem(TRUST_TOKEN_KEY, token);
 
-    // Save to localStorage for persistence
-    localStorage.setItem(TRUST_USER_KEY, userStr);
-    if (token) localStorage.setItem(TRUST_TOKEN_KEY, token);
+    // Clear any SuperAdmin session lingering in this tab
+    sessionStorage.removeItem(SUPERADMIN_USER_KEY);
+    sessionStorage.removeItem(SUPERADMIN_TOKEN_KEY);
 
+    // Save profile cache
     if (user.email) {
       localStorage.setItem(`profile_data_${user.email.toLowerCase()}`, userStr);
     }
 
+    // Dispatch events for in-tab reactivity
     window.dispatchEvent(new CustomEvent('trust-session-change', { detail: user }));
+    window.dispatchEvent(new CustomEvent('superadmin-session-change', { detail: null }));
   } catch (e) {
     console.error('Error setting trust session:', e);
   }
@@ -197,6 +179,22 @@ export function clearTrustSession() {
     window.dispatchEvent(new CustomEvent('trust-session-change', { detail: null }));
   } catch (e) {
     console.error('Error clearing trust session:', e);
+  }
+}
+
+/**
+ * Clear all sessions for the current tab
+ */
+export function clearCurrentTabSessions() {
+  try {
+    sessionStorage.removeItem(SUPERADMIN_USER_KEY);
+    sessionStorage.removeItem(SUPERADMIN_TOKEN_KEY);
+    sessionStorage.removeItem(TRUST_USER_KEY);
+    sessionStorage.removeItem(TRUST_TOKEN_KEY);
+    window.dispatchEvent(new CustomEvent('superadmin-session-change', { detail: null }));
+    window.dispatchEvent(new CustomEvent('trust-session-change', { detail: null }));
+  } catch (e) {
+    console.error('Error clearing current tab sessions:', e);
   }
 }
 
@@ -226,35 +224,15 @@ export function getCurrentToken(pathname) {
   return getTrustSession()?.token || '';
 }
 
-// ==========================================
-// Self-Healing Migration on Module Load
-// ==========================================
-// If legacy 'user_info' contains Super Admin data from before this fix,
-// migrate it to 'superadmin_user_info' and remove it from 'user_info'
-// so it never contaminates the Trust Admin portal.
+// Clean up any legacy or cross-contaminated keys
 try {
-  const legacyUser = safeParse(localStorage.getItem(LEGACY_USER_KEY));
-  if (isSuperUser(legacyUser)) {
-    const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
-    if (!localStorage.getItem(SUPERADMIN_USER_KEY)) {
-      localStorage.setItem(SUPERADMIN_USER_KEY, JSON.stringify(legacyUser));
-      if (legacyToken) localStorage.setItem(SUPERADMIN_TOKEN_KEY, legacyToken);
-    }
-    localStorage.removeItem(LEGACY_USER_KEY);
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
-  }
-
-  const sessLegacy = safeParse(sessionStorage.getItem(LEGACY_USER_KEY));
-  if (isSuperUser(sessLegacy)) {
-    const sessToken = sessionStorage.getItem(LEGACY_TOKEN_KEY);
-    if (!sessionStorage.getItem(SUPERADMIN_USER_KEY)) {
-      sessionStorage.setItem(SUPERADMIN_USER_KEY, JSON.stringify(sessLegacy));
-      if (sessToken) sessionStorage.setItem(SUPERADMIN_TOKEN_KEY, sessToken);
-    }
-    sessionStorage.removeItem(LEGACY_USER_KEY);
-    sessionStorage.removeItem(LEGACY_TOKEN_KEY);
-  }
-} catch (e) {
-  console.warn('Session auto-migration notice:', e.message);
-}
+  localStorage.removeItem(LEGACY_USER_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem(SUPERADMIN_USER_KEY);
+  localStorage.removeItem(SUPERADMIN_TOKEN_KEY);
+  localStorage.removeItem(TRUST_USER_KEY);
+  localStorage.removeItem(TRUST_TOKEN_KEY);
+  sessionStorage.removeItem(LEGACY_USER_KEY);
+  sessionStorage.removeItem(LEGACY_TOKEN_KEY);
+} catch (e) {}
 

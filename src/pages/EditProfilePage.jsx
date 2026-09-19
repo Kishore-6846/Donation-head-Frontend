@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SimplePopup from '../components/SimplePopup';
-import { ChevronUp, AlertTriangle, CheckCircle2, Sparkles, User } from 'lucide-react';
+import { ChevronUp, AlertTriangle, AlertCircle, CheckCircle2, Sparkles, User, Trash2 } from 'lucide-react';
 import { getCurrentUser, isSuperUser, getSuperAdminSession, getTrustSession, setSuperAdminSession, setTrustSession } from '../utils/authStorage';
 
 export default function EditProfilePage({ user, onUpdateUser }) {
@@ -11,6 +11,10 @@ export default function EditProfilePage({ user, onUpdateUser }) {
 
   const [hasLogo, setHasLogo] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const [logoError, setLogoError] = useState('');
+  const [signatureError, setSignatureError] = useState('');
+  const logoInputRef = useRef(null);
+  const signatureInputRef = useRef(null);
   const [toastMessage, setToastMessage] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, target: null });
 
@@ -26,10 +30,14 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     if (deleteConfirm.target === 'logo') {
       setFormData(prev => ({ ...prev, logo: '' }));
       setHasLogo(false);
+      setLogoError('');
+      if (logoInputRef.current) logoInputRef.current.value = '';
       setToastMessage('Trust logo removed successfully!');
     } else if (deleteConfirm.target === 'signature') {
       setFormData(prev => ({ ...prev, signature: '' }));
       setHasSignature(false);
+      setSignatureError('');
+      if (signatureInputRef.current) signatureInputRef.current.value = '';
       setToastMessage('Signature photo removed successfully!');
     }
     setDeleteConfirm({ isOpen: false, target: null });
@@ -179,8 +187,21 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'phone' || name === 'contactPersonMobile') {
-      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      let numericVal = value.replace(/\D/g, '').slice(0, 10);
+      if (numericVal.length > 0 && !/^[6-9]/.test(numericVal)) {
+        numericVal = numericVal.replace(/^[^6-9]+/, '');
+      }
       setFormData(prev => ({ ...prev, [name]: numericVal }));
+      return;
+    }
+    if (name === 'panNo' || name === 'signatoryPan') {
+      const cleanPan = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, [name]: cleanPan }));
+      return;
+    }
+    if (name === 'contactPerson' || name === 'firstName' || name === 'surname') {
+      const cleanName = value.replace(/[^a-zA-Z\s]/g, '');
+      setFormData(prev => ({ ...prev, [name]: cleanName }));
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -189,10 +210,28 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   const handleLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setToastMessage('Logo file exceeds maximum 2MB size limit.');
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!allowedTypes.includes(file.type) && !allowedExts.includes(fileExt)) {
+      setLogoError('Only image files (.jpg, .jpeg, .png, .webp) are allowed.');
+      setToastMessage('Only image files (.jpg, .jpeg, .png, .webp) are allowed.');
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      setTimeout(() => setToastMessage(''), 3000);
       return;
     }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoError('Logo file exceeds maximum 2MB size limit.');
+      setToastMessage('Logo file exceeds maximum 2MB size limit.');
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    setLogoError('');
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result;
@@ -207,10 +246,28 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   const handleSignatureUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setToastMessage('Signature file exceeds maximum 2MB size limit.');
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!allowedTypes.includes(file.type) && !allowedExts.includes(fileExt)) {
+      setSignatureError('Only image files (.jpg, .jpeg, .png, .webp) are allowed.');
+      setToastMessage('Only image files (.jpg, .jpeg, .png, .webp) are allowed.');
+      if (signatureInputRef.current) signatureInputRef.current.value = '';
+      setTimeout(() => setToastMessage(''), 3000);
       return;
     }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setSignatureError('Signature file exceeds maximum 2MB size limit.');
+      setToastMessage('Signature file exceeds maximum 2MB size limit.');
+      if (signatureInputRef.current) signatureInputRef.current.value = '';
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    setSignatureError('');
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result;
@@ -225,14 +282,32 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (formData.phone && formData.phone.length !== 10) {
-      setToastMessage('Phone number must be exactly 10 digits.');
+    if (formData.phone && !/^[6-9]\d{9}$/.test(formData.phone)) {
+      setToastMessage('Phone number must be a valid 10-digit number starting with 6, 7, 8, or 9.');
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
-    if (formData.contactPersonMobile && formData.contactPersonMobile.length !== 10) {
-      setToastMessage('Contact Person Mobile number must be exactly 10 digits.');
+    if (formData.contactPersonMobile && !/^[6-9]\d{9}$/.test(formData.contactPersonMobile)) {
+      setToastMessage('Contact Person Mobile number must be a valid 10-digit number starting with 6, 7, 8, or 9.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    if (formData.contactPerson && !/^[a-zA-Z\s]+$/.test(formData.contactPerson.trim())) {
+      setToastMessage('Contact Person name must contain only letters and spaces (no numbers or special characters).');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    if (formData.panNo && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNo.trim())) {
+      setToastMessage('Please enter a valid 10-character PAN number without special characters (e.g. ABCDE1234F).');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    if (formData.signatoryPan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.signatoryPan.trim())) {
+      setToastMessage('Signatory PAN must be a valid 10-character PAN number without special characters (e.g. ABCDE1234F).');
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
@@ -495,26 +570,35 @@ export default function EditProfilePage({ user, onUpdateUser }) {
 
               {/* Upload Logo */}
               <div>
-                <div style={{ fontSize: '13px', color: '#333', marginBottom: '4px' }}>
-                  Upload Logo (jpg, Max 2MB)
+                <div style={{ fontSize: '13px', color: '#333', marginBottom: '6px' }}>
+                  Upload Logo (Image files only: .png, .jpg, .jpeg, .webp, Max 2MB)
                   <input
                     type="file"
-                    accept=".jpg,.jpeg,.png"
+                    ref={logoInputRef}
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
                     onChange={handleLogoUpload}
-                    style={{ marginLeft: '10px', fontSize: '12px' }}
+                    style={{
+                      marginLeft: '10px',
+                      fontSize: '12px',
+                      border: logoError ? '1.5px solid #ef4444' : '1px solid #ced4da',
+                      backgroundColor: logoError ? '#fef2f2' : '#ffffff',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      outline: 'none',
+                      boxShadow: logoError ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                      transition: 'all 0.2s ease'
+                    }}
                   />
                 </div>
-                
-                {/* <div style={{ fontSize: '11.5px', color: '#555', marginBottom: '10px' }}>
-                  ⓘ Your logo will be displayed as{' '}
-                  <span style={{ color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' }}>
-                    Our Esteemed Client
-                  </span>{' '}
-                  on our website
-                </div> */}
+                {logoError && (
+                  <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '500' }}>
+                    <AlertCircle size={13} style={{ flexShrink: 0 }} />
+                    <span>{logoError}</span>
+                  </div>
+                )}
 
                 {Boolean(hasLogo && formData.logo) && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
                     <span style={{ fontSize: '13px', color: '#333' }}>Preview:</span>
                     <div
                       style={{
@@ -542,17 +626,23 @@ export default function EditProfilePage({ user, onUpdateUser }) {
                       type="button"
                       onClick={() => triggerDelete('logo')}
                       style={{
-                        backgroundColor: '#dc3545',
-                        color: '#ffffff',
-                        border: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        backgroundColor: '#fee2e2',
+                        color: '#dc2626',
+                        border: '1px solid #fca5a5',
                         padding: '6px 14px',
                         borderRadius: '4px',
                         fontSize: '12px',
                         fontWeight: '600',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
                       }}
+                      title="Remove logo"
                     >
-                      Delete
+                      <Trash2 size={13} />
+                      <span>Remove Logo</span>
                     </button>
                   </div>
                 )}
@@ -700,14 +790,24 @@ export default function EditProfilePage({ user, onUpdateUser }) {
 
               <div>
                 <label className="form-label" style={{ fontSize: '12.5px' }}>
-                  Upload Signature photo: Size: 192X86px (.jpg file, Max 2MB)
+                  Upload Signature photo: Size: 192X86px (.jpg, .jpeg, .png, .webp, Max 2MB)
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   <input
                     type="file"
-                    accept=".jpg,.jpeg,.png"
+                    ref={signatureInputRef}
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
                     onChange={handleSignatureUpload}
-                    style={{ fontSize: '12px' }}
+                    style={{
+                      fontSize: '12px',
+                      border: signatureError ? '1.5px solid #ef4444' : '1px solid #ced4da',
+                      backgroundColor: signatureError ? '#fef2f2' : '#ffffff',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      outline: 'none',
+                      boxShadow: signatureError ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                      transition: 'all 0.2s ease'
+                    }}
                   />
 
                   {Boolean(hasSignature && formData.signature) && (
@@ -724,21 +824,32 @@ export default function EditProfilePage({ user, onUpdateUser }) {
                         type="button"
                         onClick={() => triggerDelete('signature')}
                         style={{
-                          backgroundColor: '#dc3545',
-                          color: '#fff',
-                          border: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          backgroundColor: '#fee2e2',
+                          color: '#dc2626',
+                          border: '1px solid #fca5a5',
                           padding: '5px 12px',
                           borderRadius: '4px',
                           fontSize: '12px',
                           fontWeight: '600',
                           cursor: 'pointer'
                         }}
+                        title="Remove signature"
                       >
-                        Delete
+                        <Trash2 size={12} />
+                        <span>Delete</span>
                       </button>
                     </div>
                   )}
                 </div>
+                {signatureError && (
+                  <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '500' }}>
+                    <AlertCircle size={13} style={{ flexShrink: 0 }} />
+                    <span>{signatureError}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -387,7 +387,7 @@ export default function SuperAdminDashboardPage({ user }) {
                               fontWeight: (u.status === 'Pending' || u.status === 'Pending Approval') ? 700 : 600
                             }}
                           >
-                            {(u.status === 'Pending' || u.status === 'Pending Approval') ? '⏳ Pending' : u.status}
+                            {(u.status === 'Pending' || u.status === 'Pending Approval') ? 'Pending' : u.status}
                           </span>
                         </td>
                       </tr>

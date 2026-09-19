@@ -384,7 +384,7 @@ export default function UsersManagementPage() {
             <span className="stat-modern-val" style={{ color: '#b45309' }}>{pendingUsersCount}</span>
           </div>
           <div className="stat-modern-bottom">
-            <span className="stat-modern-title">Pending Approvals</span>
+            <span className="stat-modern-title">Pending</span>
           </div>
         </div>
 
@@ -432,9 +432,8 @@ export default function UsersManagementPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="All">All Statuses</option>
-            <option value="Pending">Pending Approval ({pendingUsersCount})</option>
+            <option value="Pending">Pending ({pendingUsersCount})</option>
             <option value="Active">Active ({activeUsersCount})</option>
-            <option value="Trial">Trial ({trialUsersCount})</option>
             <option value="Suspended">Suspended</option>
           </select>
         </div>
@@ -536,11 +535,11 @@ export default function UsersManagementPage() {
                     <td style={{ fontSize: '13px', color: '#64748b' }}>{u.joinedDate || '10/01/2026'}</td>
                     <td>
                       {isPending ? (
-                        <span className="badge-pill badge-warning" style={{ backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', fontWeight: 700 }}>
-                          ⏳ Pending Approval
+                        <span className="badge-pill badge-warning" style={{ backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          Pending
                         </span>
                       ) : (
-                        <span className={`badge-pill ${u.status === 'Active' ? 'badge-success' : (u.status === 'Trial' ? 'badge-warning' : 'badge-danger')}`}>
+                        <span className={`badge-pill ${u.status === 'Active' ? 'badge-success' : (u.status === 'Trial' ? 'badge-warning' : 'badge-danger')}`} style={{ whiteSpace: 'nowrap' }}>
                           {u.status}
                         </span>
                       )}
@@ -550,23 +549,38 @@ export default function UsersManagementPage() {
                         {isPending && (
                           <button
                             type="button"
-                            className="btn-table-action"
                             style={{
-                              backgroundColor: '#ecfdf5',
-                              color: '#059669',
-                              borderColor: '#a7f3d0',
-                              padding: '5px 9px',
+                              backgroundColor: '#059669',
+                              color: '#ffffff',
+                              border: '1px solid #047857',
+                              padding: '5px 12px',
+                              height: '32px',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '4px',
+                              justifyContent: 'center',
+                              gap: '5px',
                               fontWeight: 700,
-                              fontSize: '11.5px',
-                              borderRadius: '4px'
+                              fontSize: '12px',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              boxShadow: '0 1px 3px rgba(5, 150, 105, 0.25)',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#047857';
+                              e.currentTarget.style.transform = 'translateY(-1px)';
+                              e.currentTarget.style.boxShadow = '0 3px 6px rgba(5, 150, 105, 0.35)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = '#059669';
+                              e.currentTarget.style.transform = 'none';
+                              e.currentTarget.style.boxShadow = '0 1px 3px rgba(5, 150, 105, 0.25)';
                             }}
                             onClick={() => handleApproveUser(u)}
                             title="Approve & Grant Admin Portal Access"
                           >
-                            <CheckCircle2 size={13} />
+                            <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
                             <span>Approve</span>
                           </button>
                         )}

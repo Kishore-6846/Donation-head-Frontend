@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import navLogo from '../assets/Receipt-Nav-Logo.png';
-import { Lock, FileText, CheckCircle2, AlertCircle, Upload, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
+import { Lock, FileText, CheckCircle2, AlertCircle, Upload, Eye, EyeOff, Shield, ArrowRight, Trash2 } from 'lucide-react';
 import { setTrustSession } from '../utils/authStorage';
 
 const INDIAN_STATES = [
@@ -63,9 +63,11 @@ export default function RegisterPage({ onLoginSuccess }) {
     contactPersonMobile: ''
   });
 
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
+  const logoInputRef = useRef(null);
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -142,26 +144,80 @@ export default function RegisterPage({ onLoginSuccess }) {
   const planGst = parseFloat((planBasePrice * 0.18).toFixed(2));
   const planGrandTotal = (planBasePrice + planGst).toFixed(2);
 
+  const clearFieldError = (fieldName) => {
+    if (fieldErrors[fieldName]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[fieldName];
+        return next;
+      });
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    clearFieldError(name);
+
     if (name === 'mobile' || name === 'contactPersonMobile') {
-      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      // 1. Don't allow alphabets, special characters, spaces
+      let numericVal = value.replace(/\D/g, '').slice(0, 10);
+      // 2. Allow mobile number to start only with 6 to 9
+      if (numericVal.length > 0 && !/^[6-9]/.test(numericVal)) {
+        numericVal = numericVal.replace(/^[^6-9]+/, '');
+      }
       setFormData((prev) => ({ ...prev, [name]: numericVal }));
+      return;
+    }
+    if (name === 'panNo') {
+      // Don't allow special characters in PAN number (uppercase alphanumeric only)
+      const cleanPan = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      setFormData((prev) => ({ ...prev, panNo: cleanPan }));
+      return;
+    }
+    if (name === 'contactPerson') {
+      // Don't allow special characters or numbers in contact person
+      const cleanName = value.replace(/[^a-zA-Z\s]/g, '');
+      setFormData((prev) => ({ ...prev, contactPerson: cleanName }));
       return;
     }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handlePrivacyChange = (e) => {
+    const checked = e.target.checked;
+    setAgreedPrivacy(checked);
+    if (checked) {
+      clearFieldError('agreedPrivacy');
+    }
+  };
+
   const handleLogoChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setError('Logo file size must not exceed 2MB');
-        e.target.value = null;
+      // Allow only image formats
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const fileExt = file.name.split('.').pop().toLowerCase();
+      const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+      if (!allowedTypes.includes(file.type) && !allowedExts.includes(fileExt)) {
+        setFieldErrors(prev => ({ ...prev, logo: 'Only image files (.jpg, .jpeg, .png, .webp) are allowed.' }));
+        setError('Only image files (.jpg, .jpeg, .png, .webp) are allowed for Trust/NGO Logo.');
+        if (logoInputRef.current) logoInputRef.current.value = '';
         setLogoFile(null);
         setLogoPreview(null);
         return;
       }
+
+      if (file.size > 2 * 1024 * 1024) {
+        setFieldErrors(prev => ({ ...prev, logo: 'Logo file size must not exceed 2MB.' }));
+        setError('Logo file size must not exceed 2MB.');
+        if (logoInputRef.current) logoInputRef.current.value = '';
+        setLogoFile(null);
+        setLogoPreview(null);
+        return;
+      }
+
+      clearFieldError('logo');
       setError('');
       setLogoFile(file);
       const reader = new FileReader();
@@ -172,49 +228,150 @@ export default function RegisterPage({ onLoginSuccess }) {
     }
   };
 
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+    clearFieldError('logo');
+    if (logoInputRef.current) {
+      logoInputRef.current.value = '';
+    }
+  };
+
+  const getFieldStyle = (fieldName, extraStyle = {}) => {
+    const hasErr = Boolean(fieldErrors[fieldName]);
+    return {
+      width: '100%',
+      padding: '10px 14px',
+      fontSize: '14px',
+      border: hasErr ? '1.5px solid #ef4444' : '1px solid #ced4da',
+      borderRadius: '4px',
+      outline: 'none',
+      fontFamily: 'inherit',
+      boxSizing: 'border-box',
+      backgroundColor: hasErr ? '#fef2f2' : '#ffffff',
+      transition: 'border-color 0.2s, background-color 0.2s, box-shadow 0.2s',
+      boxShadow: hasErr ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+      ...extraStyle
+    };
+  };
+
+  const renderFieldError = (fieldName) => {
+    if (!fieldErrors[fieldName]) return null;
+    return (
+      <div
+        style={{
+          color: '#ef4444',
+          fontSize: '12px',
+          marginTop: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          fontWeight: '500'
+        }}
+      >
+        <AlertCircle size={13} style={{ flexShrink: 0 }} />
+        <span>{fieldErrors[fieldName]}</span>
+      </div>
+    );
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
+    const errors = {};
+
     if (!formData.trustName.trim()) {
-      setError('Please enter your Trust / NGO Name.');
-      return;
+      errors.trustName = 'Trust / NGO Name is required.';
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      setError('Please enter a valid Trust Email address (e.g. admin@yourngo.org).');
-      return;
+    if (!formData.email.trim()) {
+      errors.email = 'Email ID is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      errors.email = 'Please enter a valid Trust Email address (e.g. admin@yourngo.org).';
     }
 
-    if (!formData.mobile || formData.mobile.length !== 10) {
-      setError('Mobile number must be exactly 10 digits.');
-      return;
+    // Password validation: Upper, lower, number, special char, min 8 chars
+    const pwd = formData.password || '';
+    if (!pwd) {
+      errors.password = 'Password is required.';
+    } else if (pwd.length < 8) {
+      errors.password = 'Password must be at least 8 characters.';
+    } else if (!/[A-Z]/.test(pwd)) {
+      errors.password = 'Password must contain at least one uppercase letter (A-Z).';
+    } else if (!/[a-z]/.test(pwd)) {
+      errors.password = 'Password must contain at least one lowercase letter (a-z).';
+    } else if (!/[0-9]/.test(pwd)) {
+      errors.password = 'Password must contain at least one number (0-9).';
+    } else if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(pwd)) {
+      errors.password = 'Password must contain at least one special character (!@#$%...).';
     }
 
-    if (formData.contactPersonEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactPersonEmail.trim())) {
-      setError('Please enter a valid Contact Person Email address.');
-      return;
-    }
-
-    if (formData.contactPersonMobile && formData.contactPersonMobile.length !== 10) {
-      setError('Contact Person Mobile number must be exactly 10 digits.');
-      return;
-    }
-
-    if (!formData.password || formData.password.length < 6) {
-      setError('Please enter a password of at least 6 characters.');
-      return;
-    }
-
-    if (!agreedPrivacy) {
-      setError('Please agree to the Privacy Policy to continue.');
-      return;
+    // Mobile validation: 10 digits starting with 6 to 9
+    if (!formData.mobile) {
+      errors.mobile = 'Mobile number is required.';
+    } else if (!/^[6-9]\d{9}$/.test(formData.mobile)) {
+      errors.mobile = 'Mobile number must be a valid 10-digit number starting with 6, 7, 8, or 9.';
     }
 
     if (!formData.state) {
-      setError('Please select your State.');
+      errors.state = 'Please select your State.';
+    }
+
+    if (!formData.plan) {
+      errors.plan = 'Please select a subscription plan.';
+    }
+
+    // Trust / NGO Registration Number mandatory
+    if (!formData.registrationNo.trim()) {
+      errors.registrationNo = 'Trust / NGO Registration Number is required.';
+    }
+
+    // Trust / NGO PAN Number mandatory & format validation
+    if (!formData.panNo.trim()) {
+      errors.panNo = 'Trust / NGO PAN Number is required.';
+    } else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNo.trim())) {
+      errors.panNo = 'Enter a valid 10-character PAN without special characters (e.g. ABCDE1234F).';
+    }
+
+    // Contact Person validation: only letters and spaces
+    if (!formData.contactPerson.trim()) {
+      errors.contactPerson = 'Contact Person name is required.';
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.contactPerson.trim())) {
+      errors.contactPerson = 'Contact Person name must contain only letters and spaces.';
+    }
+
+    if (!formData.contactPersonEmail.trim()) {
+      errors.contactPersonEmail = 'Contact Person Email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactPersonEmail.trim())) {
+      errors.contactPersonEmail = 'Please enter a valid Contact Person Email address.';
+    }
+
+    // Contact Person Mobile validation: 10 digits starting with 6 to 9
+    if (!formData.contactPersonMobile) {
+      errors.contactPersonMobile = 'Contact Person Mobile is required.';
+    } else if (!/^[6-9]\d{9}$/.test(formData.contactPersonMobile)) {
+      errors.contactPersonMobile = 'Contact Person Mobile must be a valid 10-digit number starting with 6, 7, 8, or 9.';
+    }
+
+    if (!agreedPrivacy) {
+      errors.agreedPrivacy = 'Please agree to the Privacy Policy to continue.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError('Please fill in all mandatory fields with valid details.');
+
+      const firstKey = Object.keys(errors)[0];
+      const targetElement = document.querySelector(`[name="${firstKey}"]`) || document.getElementById(firstKey === 'agreedPrivacy' ? 'agreePrivacy' : firstKey);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetElement.focus?.();
+      }
       return;
     }
+
+    setFieldErrors({});
 
     setLoading(true);
 
@@ -430,7 +587,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} noValidate>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid #eafaf1' }}>
                   <FileText size={20} color="#00a651" />
                   <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
@@ -448,21 +605,12 @@ export default function RegisterPage({ onLoginSuccess }) {
                     <input
                       type="text"
                       name="trustName"
-                      required
                       placeholder="Enter Trust / NGO Name"
                       value={formData.trustName}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('trustName')}
                     />
+                    {renderFieldError('trustName')}
                   </div>
 
                   {/* Email ID * (This cannot be changed later) */}
@@ -476,21 +624,12 @@ export default function RegisterPage({ onLoginSuccess }) {
                     <input
                       type="email"
                       name="email"
-                      required
                       placeholder="admin@yourngo.org"
                       value={formData.email}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('email')}
                     />
+                    {renderFieldError('email')}
                   </div>
 
                   {/* Password * */}
@@ -498,28 +637,17 @@ export default function RegisterPage({ onLoginSuccess }) {
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
                       Password <span style={{ color: '#ef4444' }}>*</span>{' '}
                       <span style={{ fontSize: '12px', fontWeight: '400', color: '#64748b' }}>
-                        (Min. 6 characters)
+                        (Strong password, min. 8 chars)
                       </span>
                     </label>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         type={showPassword ? 'text' : 'password'}
                         name="password"
-                        required
-                        minLength={6}
-                        placeholder="Create account password"
+                        placeholder="e.g. Pass@123 (Upper, Lower, Number, Special)"
                         value={formData.password}
                         onChange={handleChange}
-                        style={{
-                          width: '100%',
-                          padding: '10px 42px 10px 14px',
-                          fontSize: '14px',
-                          border: '1px solid #ced4da',
-                          borderRadius: '4px',
-                          outline: 'none',
-                          fontFamily: 'inherit',
-                          boxSizing: 'border-box'
-                        }}
+                        style={getFieldStyle('password', { padding: '10px 42px 10px 14px' })}
                       />
                       <button
                         type="button"
@@ -541,6 +669,33 @@ export default function RegisterPage({ onLoginSuccess }) {
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
+                    {renderFieldError('password')}
+
+                    {/* Interactive Password Strength Indicator */}
+                    {formData.password.length > 0 && (() => {
+                      const p = formData.password;
+                      const hasLen = p.length >= 8;
+                      const hasUp = /[A-Z]/.test(p);
+                      const hasLo = /[a-z]/.test(p);
+                      const hasNu = /[0-9]/.test(p);
+                      const hasSp = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(p);
+                      const isStrong = hasLen && hasUp && hasLo && hasNu && hasSp;
+
+                      return (
+                        <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: isStrong ? '#f0fdf4' : '#f8fafc', borderRadius: '6px', border: `1px solid ${isStrong ? '#bbf7d0' : '#e2e8f0'}`, fontSize: '11.5px' }}>
+                          <div style={{ fontWeight: '600', color: isStrong ? '#16a34a' : '#475569', marginBottom: '4px' }}>
+                            {isStrong ? '✓ Strong Password Ready' : 'Password Checklist:'}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px' }}>
+                            <span style={{ color: hasLen ? '#16a34a' : '#94a3b8' }}>{hasLen ? '✓' : '○'} Min. 8 characters</span>
+                            <span style={{ color: hasUp ? '#16a34a' : '#94a3b8' }}>{hasUp ? '✓' : '○'} 1 Uppercase (A-Z)</span>
+                            <span style={{ color: hasLo ? '#16a34a' : '#94a3b8' }}>{hasLo ? '✓' : '○'} 1 Lowercase (a-z)</span>
+                            <span style={{ color: hasNu ? '#16a34a' : '#94a3b8' }}>{hasNu ? '✓' : '○'} 1 Number (0-9)</span>
+                            <span style={{ color: hasSp ? '#16a34a' : '#94a3b8', gridColumn: '1 / -1' }}>{hasSp ? '✓' : '○'} 1 Special character (!@#$%...)</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Mobile Number * */}
@@ -551,23 +706,14 @@ export default function RegisterPage({ onLoginSuccess }) {
                     <input
                       type="tel"
                       name="mobile"
-                      required
                       maxLength={10}
                       inputMode="numeric"
                       placeholder="10-digit mobile number"
                       value={formData.mobile}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('mobile')}
                     />
+                    {renderFieldError('mobile')}
                   </div>
 
                   {/* Address */}
@@ -581,16 +727,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                       placeholder="Registered street address / city"
                       value={formData.address}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('address')}
                     />
                   </div>
 
@@ -601,20 +738,9 @@ export default function RegisterPage({ onLoginSuccess }) {
                     </label>
                     <select
                       name="state"
-                      required
                       value={formData.state}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#ffffff',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('state', { backgroundColor: fieldErrors.state ? '#fef2f2' : '#ffffff' })}
                     >
                       <option value="">Select State</option>
                       {INDIAN_STATES.map((st) => (
@@ -623,70 +749,13 @@ export default function RegisterPage({ onLoginSuccess }) {
                         </option>
                       ))}
                     </select>
+                    {renderFieldError('state')}
                   </div>
 
-                  {/* Select Subscription Plan * (Dynamic from SuperAdmin Plans) */}
+                  {/* Trust/NGO Registration Number * */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
-                      Select Subscription Plan <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <select
-                      name="plan"
-                      required
-                      value={formData.plan}
-                      onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        color: '#065f46',
-                        border: '1.5px solid #00a651',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        backgroundColor: '#f0fdf4',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {plans && plans.length > 0 ? (
-                        plans.map(p => (
-                          <option key={p._id || p.name} value={p.name}>
-                            ⭐ {p.name} Plan — ₹{Number(p.price).toLocaleString('en-IN')}/{p.billingCycle || 'Year'} ({p.staffUserLimit || 'Staff Access'})
-                          </option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="Standard">⭐ Standard Plan — ₹4,000/Annual (4 Staff Users)</option>
-                          <option value="Advanced">⭐ Advanced Plan — ₹7,000/Annual (9 Staff Users)</option>
-                          <option value="Enterprise">⭐ Enterprise Plan — ₹10,000/Annual (20 Staff Users)</option>
-                        </>
-                      )}
-                    </select>
-                    {/* <p style={{ fontSize: '11.5px', color: '#64748b', margin: '4px 0 0 0' }}>
-                      Includes 48-Hour Free Trial access to your selected plan features.
-                    </p> */}
-                    <div style={{ marginTop: '8px', padding: '10px 14px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '12.5px', color: '#166534' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                        <span>Base Subscription Fee:</span>
-                        <span style={{ fontWeight: 600 }}>₹{planBasePrice.toLocaleString('en-IN')}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                        <span>GST (18%):</span>
-                        <span style={{ fontWeight: 600 }}>₹{planGst.toLocaleString('en-IN')}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, borderTop: '1px dashed #86efac', paddingTop: '4px', fontSize: '13px', color: '#065f46' }}>
-                        <span>Total Payable at Registration:</span>
-                        <span>₹{Number(planGrandTotal).toLocaleString('en-IN')}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Trust/NGO Registration Number */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
-                      Trust/NGO Registration Number
+                      Trust/NGO Registration Number <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
@@ -694,23 +763,15 @@ export default function RegisterPage({ onLoginSuccess }) {
                       placeholder="e.g. U85300TN2021NPL142443 / 123/2021"
                       value={formData.registrationNo}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('registrationNo')}
                     />
+                    {renderFieldError('registrationNo')}
                   </div>
 
-                  {/* Trust/NGO PAN Number */}
+                  {/* Trust/NGO PAN Number * */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
-                      Trust/NGO PAN Number
+                      Trust/NGO PAN Number <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
@@ -718,19 +779,10 @@ export default function RegisterPage({ onLoginSuccess }) {
                       maxLength={10}
                       placeholder="e.g. AAATT1234K"
                       value={formData.panNo}
-                      onChange={(e) => setFormData(p => ({ ...p, panNo: e.target.value.toUpperCase() }))}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box',
-                        textTransform: 'uppercase'
-                      }}
+                      onChange={handleChange}
+                      style={getFieldStyle('panNo', { textTransform: 'uppercase' })}
                     />
+                    {renderFieldError('panNo')}
                   </div>
 
                   {/* Website */}
@@ -744,23 +796,14 @@ export default function RegisterPage({ onLoginSuccess }) {
                       placeholder="e.g. https://www.yourngo.org"
                       value={formData.website}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('website')}
                     />
                   </div>
 
-                  {/* Contact Person Name */}
+                  {/* Contact Person Name * */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
-                      Contact Person Name
+                      Contact Person Name <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
@@ -768,17 +811,9 @@ export default function RegisterPage({ onLoginSuccess }) {
                       placeholder="e.g. Ramesh Kumar"
                       value={formData.contactPerson}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('contactPerson')}
                     />
+                    {renderFieldError('contactPerson')}
                   </div>
 
                   {/* Contact Person Email * */}
@@ -789,21 +824,12 @@ export default function RegisterPage({ onLoginSuccess }) {
                     <input
                       type="email"
                       name="contactPersonEmail"
-                      required
                       placeholder="person@yourngo.org"
                       value={formData.contactPersonEmail}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('contactPersonEmail')}
                     />
+                    {renderFieldError('contactPersonEmail')}
                   </div>
 
                   {/* Contact Person Mobile * */}
@@ -814,73 +840,164 @@ export default function RegisterPage({ onLoginSuccess }) {
                     <input
                       type="tel"
                       name="contactPersonMobile"
-                      required
                       maxLength={10}
                       inputMode="numeric"
                       placeholder="10-digit mobile number"
                       value={formData.contactPersonMobile}
                       onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('contactPersonMobile')}
                     />
+                    {renderFieldError('contactPersonMobile')}
                   </div>
 
-                  {/* Trust/NGO Logo (Type: jpg, Max. size: 2MB) */}
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
-                      Trust/NGO Logo (Type: jpg, Max. size: 2MB)
+                  {/* Select Subscription Plan * (Full Width Card with side-by-side Dropdown & Estimation Box) */}
+                  <div style={{ gridColumn: '1 / -1', padding: '16px 18px', backgroundColor: '#fafffd', border: '1px solid #d1fae5', borderRadius: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', alignItems: 'center' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '700', color: '#065f46', marginBottom: '6px' }}>
+                          Select Subscription Plan <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <select
+                          name="plan"
+                          value={formData.plan}
+                          onChange={handleChange}
+                          style={getFieldStyle('plan', {
+                            fontWeight: '600',
+                            color: '#065f46',
+                            border: fieldErrors.plan ? '1.5px solid #ef4444' : '1.5px solid #00a651',
+                            backgroundColor: fieldErrors.plan ? '#fef2f2' : '#ffffff',
+                            cursor: 'pointer'
+                          })}
+                        >
+                          {plans && plans.length > 0 ? (
+                            plans.map(p => (
+                              <option key={p._id || p.name} value={p.name}>
+                                ⭐ {p.name} Plan — ₹{Number(p.price).toLocaleString('en-IN')}/{p.billingCycle || 'Year'} ({p.staffUserLimit || 'Staff Access'})
+                              </option>
+                            ))
+                          ) : (
+                            <>
+                              <option value="Standard">⭐ Standard Plan — ₹4,000/Annual (4 Staff Users)</option>
+                              <option value="Advanced">⭐ Advanced Plan — ₹7,000/Annual (9 Staff Users)</option>
+                              <option value="Enterprise">⭐ Enterprise Plan — ₹10,000/Annual (20 Staff Users)</option>
+                            </>
+                          )}
+                        </select>
+                        {renderFieldError('plan')}
+                      </div>
+
+                      {/* Fee Estimation Summary Card */}
+                      <div style={{ padding: '12px 16px', backgroundColor: '#ffffff', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '12.5px', color: '#166534', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                          <span>Base Subscription Fee:</span>
+                          <span style={{ fontWeight: 600 }}>₹{planBasePrice.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                          <span>GST (18%):</span>
+                          <span style={{ fontWeight: 600 }}>₹{planGst.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, borderTop: '1px dashed #86efac', paddingTop: '4px', fontSize: '13px', color: '#065f46' }}>
+                          <span>Total Payable at Registration:</span>
+                          <span>₹{Number(planGrandTotal).toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trust/NGO Logo (Full Width Card) */}
+                  <div style={{
+                    gridColumn: '1 / -1',
+                    padding: '14px 16px',
+                    backgroundColor: '#f8fafc',
+                    border: fieldErrors.logo ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                    borderRadius: '8px'
+                  }}>
+                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '8px' }}>
+                      Trust/NGO Logo <span style={{ fontSize: '12px', fontWeight: '400', color: '#64748b' }}>(Image files only: .png, .jpg, .jpeg, .webp, Max. 2MB)</span>
                     </label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                       <input
                         type="file"
-                        accept=".jpg,.jpeg,image/jpeg"
+                        name="logo"
+                        ref={logoInputRef}
+                        accept="image/png, image/jpeg, image/jpg, image/webp"
                         onChange={handleLogoChange}
                         style={{
-                          padding: '8px 12px',
-                          fontSize: '13.5px',
-                          border: '1px solid #ced4da',
+                          padding: '6px 10px',
+                          fontSize: '13px',
+                          border: fieldErrors.logo ? '1.5px solid #ef4444' : '1px solid #ced4da',
                           borderRadius: '4px',
                           backgroundColor: '#ffffff'
                         }}
                       />
                       {logoPreview && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f1f5f9', padding: '4px 10px', borderRadius: '4px' }}>
-                          <img src={logoPreview} alt="Logo preview" style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
-                          <span style={{ fontSize: '12px', color: '#00a651', fontWeight: '600' }}>✓ Selected</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#ffffff', padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                          <img src={logoPreview} alt="Logo preview" style={{ height: '36px', width: 'auto', objectFit: 'contain', borderRadius: '3px' }} />
+                          <span style={{ fontSize: '12.5px', color: '#00a651', fontWeight: '600' }}>✓ Selected</span>
+                          <button
+                            type="button"
+                            onClick={handleRemoveLogo}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              backgroundColor: '#fee2e2',
+                              color: '#dc2626',
+                              border: '1px solid #fca5a5',
+                              padding: '4px 10px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            title="Remove uploaded logo"
+                          >
+                            <Trash2 size={13} />
+                            <span>Remove</span>
+                          </button>
                         </div>
                       )}
                     </div>
+                    {renderFieldError('logo')}
                   </div>
                 </div>
 
                 {/* Privacy Policy Checkbox */}
-                <div style={{ marginTop: '22px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                  <input
-                    type="checkbox"
-                    id="agreePrivacy"
-                    required
-                    checked={agreedPrivacy}
-                    onChange={(e) => setAgreedPrivacy(e.target.checked)}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#00a651', marginTop: '2px' }}
-                  />
-                  <label htmlFor="agreePrivacy" style={{ fontSize: '13.5px', color: '#334155', cursor: 'pointer', lineHeight: '1.4' }}>
-                    I agree to the{' '}
-                    <Link
-                      to="/trust/privacy-policy"
-                      target="_blank"
-                      style={{ color: '#00a651', fontWeight: '600', textDecoration: 'underline' }}
-                    >
-                      Privacy Policy
-                    </Link>
-                  </label>
+                <div style={{
+                  marginTop: '22px',
+                  padding: fieldErrors.agreedPrivacy ? '8px 12px' : '0',
+                  backgroundColor: fieldErrors.agreedPrivacy ? '#fef2f2' : 'transparent',
+                  border: fieldErrors.agreedPrivacy ? '1px solid #fecaca' : 'none',
+                  borderRadius: '6px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                    <input
+                      type="checkbox"
+                      id="agreePrivacy"
+                      checked={agreedPrivacy}
+                      onChange={handlePrivacyChange}
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        cursor: 'pointer',
+                        accentColor: '#00a651',
+                        marginTop: '2px',
+                        outline: fieldErrors.agreedPrivacy ? '2px solid #ef4444' : 'none'
+                      }}
+                    />
+                    <label htmlFor="agreePrivacy" style={{ fontSize: '13.5px', color: '#334155', cursor: 'pointer', lineHeight: '1.4' }}>
+                      I agree to the{' '}
+                      <Link
+                        to="/trust/privacy-policy"
+                        target="_blank"
+                        style={{ color: '#00a651', fontWeight: '600', textDecoration: 'underline' }}
+                      >
+                        Privacy Policy
+                      </Link>
+                    </label>
+                  </div>
+                  {renderFieldError('agreedPrivacy')}
                 </div>
 
                 {/* Submit Button: Pay & Register */}
