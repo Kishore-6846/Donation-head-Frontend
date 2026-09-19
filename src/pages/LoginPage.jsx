@@ -39,10 +39,24 @@ export default function LoginPage({ onLoginSuccess }) {
           navigate('/trust/');
         }
       } else {
-        setError(data.message || 'Login failed. Please verify credentials.');
+        if (data.isPending || (data.message && data.message.toLowerCase().includes('pending approval'))) {
+          setError({
+            isPending: true,
+            title: 'Account Awaiting Super Admin Approval',
+            message: data.message || 'Your registration and plan payment have been received. Your account is currently under verification by the Super Administrator. Access will be enabled immediately upon approval.'
+          });
+        } else {
+          setError({
+            isPending: false,
+            message: data.message || 'Login failed. Please verify your email and password.'
+          });
+        }
       }
     } catch (err) {
-      setError('Unable to connect to server. Please check your connection and try again.');
+      setError({
+        isPending: false,
+        message: 'Unable to connect to server. Please check your connection and try again.'
+      });
     } finally {
       setLoading(false);
     }
@@ -130,10 +144,32 @@ export default function LoginPage({ onLoginSuccess }) {
             {/* Card Content Form */}
             <div style={{ padding: '30px 28px' }}>
               {error && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '16px' }}>
-                  <AlertCircle size={16} flexShrink={0} />
-                  <span>{error}</span>
-                </div>
+                typeof error === 'object' && error.isPending ? (
+                  <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: '8px',
+                    padding: '14px 16px',
+                    marginBottom: '18px',
+                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b45309', fontWeight: 700, fontSize: '13.5px', marginBottom: '6px' }}>
+                      <AlertCircle size={18} style={{ color: '#d97706', flexShrink: 0 }} />
+                      <span>{error.title || 'Account Pending Approval'}</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '12.5px', color: '#92400e', lineHeight: 1.55 }}>
+                      {error.message}
+                    </p>
+                    <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #fde68a', fontSize: '11.5px', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Status: <strong>⏳ Awaiting Super Admin Review</strong></span>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '16px' }}>
+                    <AlertCircle size={16} flexShrink={0} />
+                    <span>{typeof error === 'object' ? error.message : error}</span>
+                  </div>
+                )
               )}
 
               <form onSubmit={handleLogin}>

@@ -122,8 +122,8 @@ function ProtectedLayout({ superAdminUser, trustUser }) {
     return <Outlet />;
   }
 
-  // Trust portal routes strictly require trustUser (Super Admin cannot pose as a Trust user)
-  if (!trustUser) {
+  // Trust portal routes strictly require trustUser and must NOT be in pending status
+  if (!trustUser || trustUser.status === 'Pending' || trustUser.status === 'Pending Approval') {
     return <Navigate to="/trust/login" replace />;
   }
 

@@ -185,6 +185,30 @@ export default function StaffPage({ user: propUser }) {
       return;
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(staffFormData.email.trim())) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Email Address',
+        message: 'Please enter a valid email address (e.g. staff@example.com).',
+        confirmText: 'OK',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (staffFormData.phone && staffFormData.phone.length !== 10) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Mobile Number',
+        message: 'Mobile number must be exactly 10 digits.',
+        confirmText: 'OK',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
     // Limit check for new staff addition
     if (!editingStaff && planStats.staffAllowed !== 'Unlimited' && planStats.staffAllowed !== 999 && staff.length >= planStats.staffAllowed) {
       setPopup({
@@ -661,11 +685,13 @@ export default function StaffPage({ user: propUser }) {
                   </label>
                   <input
                     type="tel"
-                    placeholder="e.g. 9876543210"
+                    maxLength={10}
+                    inputMode="numeric"
+                    placeholder="10-digit mobile number"
                     className="trust-input"
                     style={{ width: '100%' }}
                     value={staffFormData.phone}
-                    onChange={(e) => setStaffFormData({ ...staffFormData, phone: e.target.value })}
+                    onChange={(e) => setStaffFormData({ ...staffFormData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                   />
                 </div>
 

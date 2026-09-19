@@ -89,6 +89,11 @@ export default function ReceiptModal({ isOpen, onClose, onSave, heads = [], edit
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'phone' || name === 'mobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, [name]: numericVal }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -98,6 +103,17 @@ export default function ReceiptModal({ isOpen, onClose, onSave, heads = [], edit
       setErrorPopup('Please fill in Donor Name and Amount.');
       return;
     }
+
+    if (formData.phone && formData.phone.length !== 10) {
+      setErrorPopup('Mobile number must be exactly 10 digits.');
+      return;
+    }
+
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setErrorPopup('Please enter a valid email address.');
+      return;
+    }
+
     onSave(formData);
   };
 
@@ -155,8 +171,10 @@ export default function ReceiptModal({ isOpen, onClose, onSave, heads = [], edit
                 <input
                   type="tel"
                   name="phone"
+                  maxLength={10}
+                  inputMode="numeric"
+                  placeholder="10-digit mobile number"
                   className="form-control"
-                  placeholder="e.g. 9840123456"
                   value={formData.phone}
                   onChange={handleChange}
                 />

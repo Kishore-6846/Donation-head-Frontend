@@ -178,6 +178,11 @@ export default function EditProfilePage({ user, onUpdateUser }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'phone' || name === 'contactPersonMobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, [name]: numericVal }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -219,6 +224,24 @@ export default function EditProfilePage({ user, onUpdateUser }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    if (formData.phone && formData.phone.length !== 10) {
+      setToastMessage('Phone number must be exactly 10 digits.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    if (formData.contactPersonMobile && formData.contactPersonMobile.length !== 10) {
+      setToastMessage('Contact Person Mobile number must be exactly 10 digits.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    if (formData.contactPersonEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactPersonEmail.trim())) {
+      setToastMessage('Please enter a valid Contact Person Email address.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
     // Persist changes to user-scoped cache and remove polluted global cache
     localStorage.removeItem('profile_data');
     if (formData.email) {
@@ -345,8 +368,11 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               <div>
                 <label className="form-label" style={{ fontSize: '12.5px' }}>Phone:</label>
                 <input
-                  type="text"
+                  type="tel"
                   name="phone"
+                  maxLength={10}
+                  inputMode="numeric"
+                  placeholder="10-digit mobile number"
                   className="form-control"
                   value={formData.phone}
                   onChange={handleChange}
@@ -447,6 +473,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
                   type="email"
                   name="contactPersonEmail"
                   className="form-control"
+                  placeholder="e.g. contact@example.com"
                   value={formData.contactPersonEmail}
                   onChange={handleChange}
                 />
@@ -455,8 +482,11 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               <div>
                 <label className="form-label" style={{ fontSize: '12.5px' }}>Contact Person Mobile No.:</label>
                 <input
-                  type="text"
+                  type="tel"
                   name="contactPersonMobile"
+                  maxLength={10}
+                  inputMode="numeric"
+                  placeholder="10-digit mobile number"
                   className="form-control"
                   value={formData.contactPersonMobile}
                   onChange={handleChange}

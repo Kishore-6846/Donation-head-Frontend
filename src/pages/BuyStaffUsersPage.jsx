@@ -48,6 +48,11 @@ export default function BuyStaffUsersPage({ user }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'mobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, mobile: numericVal }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -83,6 +88,28 @@ export default function BuyStaffUsersPage({ user }) {
         type: 'error',
         title: 'Required Details',
         message: 'Please fill in all mandatory fields marked with *.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Email Address',
+        message: 'Please enter a valid billing email address (e.g. admin@trust.org).',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (formData.mobile.trim().length !== 10) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Mobile Number',
+        message: 'Mobile number must be exactly 10 digits.',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
       });
       return;
@@ -417,8 +444,11 @@ export default function BuyStaffUsersPage({ user }) {
                       Mobile <span style={{ color: '#dc3545' }}>*</span>
                     </label>
                     <input
-                      type="text"
+                      type="tel"
                       name="mobile"
+                      maxLength={10}
+                      inputMode="numeric"
+                      placeholder="10-digit mobile number"
                       value={formData.mobile}
                       onChange={handleChange}
                       required

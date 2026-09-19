@@ -237,6 +237,11 @@ export default function NewDonationReceiptPage({ user }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'mobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, mobile: numericVal }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -251,7 +256,7 @@ export default function NewDonationReceiptPage({ user }) {
       ...prev,
       name: donor.name,
       address: donor.address || prev.address,
-      mobile: donor.phone || prev.mobile,
+      mobile: (donor.phone || prev.mobile || '').replace(/\D/g, '').slice(0, 10),
       email: donor.email || prev.email,
       panNo: donor.panNo || prev.panNo,
       aadhaarNo: donor.aadhaarNo || prev.aadhaarNo
@@ -293,6 +298,28 @@ export default function NewDonationReceiptPage({ user }) {
         type: 'error',
         title: 'Missing Required Field',
         message: 'Please enter the donor Name.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (formData.mobile && formData.mobile.length !== 10) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Mobile Number',
+        message: 'Mobile number must be exactly 10 digits.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Email Address',
+        message: 'Please enter a valid email address (e.g. donor@example.com).',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
       });
       return;
@@ -577,11 +604,13 @@ export default function NewDonationReceiptPage({ user }) {
             <div>
               <label style={labelStyle}>Mobile</label>
               <input
-                type="text"
+                type="tel"
                 name="mobile"
+                maxLength={10}
+                inputMode="numeric"
                 value={formData.mobile}
                 onChange={handleChange}
-                placeholder="Mobile Number"
+                placeholder="10-digit mobile number"
                 style={inputStyle}
               />
             </div>

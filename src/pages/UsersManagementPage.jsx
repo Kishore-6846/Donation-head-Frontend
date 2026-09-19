@@ -172,6 +172,51 @@ export default function UsersManagementPage() {
     }
   };
 
+  const handleApproveUser = async (u) => {
+    setPopup({
+      isOpen: true,
+      type: 'success',
+      title: 'Approve Trust Account?',
+      message: `Are you sure you want to approve "${u.trustName || u.name}"? This will activate their subscription (${u.plan || 'Standard'} Plan) and allow the admin to log in.`,
+      showCancel: true,
+      confirmText: 'Yes, Approve Now',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setPopup(p => ({ ...p, isOpen: false }));
+        try {
+          const res = await fetch(`/api/users/${u._id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'Active' })
+          });
+          const data = await res.json();
+          if (data.success) {
+            fetchUsers();
+            setPopup({
+              isOpen: true,
+              type: 'success',
+              title: 'Account Approved!',
+              message: `Trust account "${u.trustName || u.name}" is now Active. The admin can now log into their Admin Portal.`,
+              confirmText: 'Great!',
+              onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+            });
+          } else {
+            setPopup({
+              isOpen: true,
+              type: 'error',
+              title: 'Approval Failed',
+              message: data.message || 'Could not update user status.',
+              confirmText: 'OK',
+              onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+            });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+  };
+
   const handleToggleStatus = async (u) => {
     const nextStatus = u.status === 'Active' ? 'Suspended' : 'Active';
     try {
@@ -229,6 +274,7 @@ export default function UsersManagementPage() {
 
   const totalUsersCount = users.length;
   const activeUsersCount = users.filter(u => u.status === 'Active').length;
+  const pendingUsersCount = users.filter(u => u.status === 'Pending' || u.status === 'Pending Approval').length;
   const trialUsersCount = users.filter(u => u.status === 'Trial').length;
   const totalReceiptsIssued = users.reduce((acc, u) => acc + (Number(u.receiptsCount) || 0), 0);
 
@@ -261,9 +307,54 @@ export default function UsersManagementPage() {
         </div>
       </div>
 
+      {/* Pending Approvals Attention Banner */}
+      {pendingUsersCount > 0 && (
+        <div style={{
+          backgroundColor: '#fffbeb',
+          border: '1px solid #fde68a',
+          borderRadius: '10px',
+          padding: '14px 20px',
+          marginBottom: '22px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+          flexWrap: 'wrap',
+          boxShadow: '0 2px 10px rgba(245, 158, 11, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '8px', backgroundColor: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Shield size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#92400e' }}>
+                {pendingUsersCount} New Trust Admin Registration{pendingUsersCount > 1 ? 's' : ''} Awaiting Approval
+              </div>
+              <div style={{ fontSize: '12.5px', color: '#b45309', marginTop: '2px' }}>
+                Trust admins have paid for their subscriptions and cannot log in until Super Admin verification. Review and click "Approve" below.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn-trust-primary"
+            style={{
+              backgroundColor: '#d97706',
+              borderColor: '#d97706',
+              fontSize: '13px',
+              padding: '8px 16px',
+              boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)'
+            }}
+            onClick={() => setStatusFilter(statusFilter === 'Pending' ? 'All' : 'Pending')}
+          >
+            {statusFilter === 'Pending' ? 'Show All Trusts' : 'View Pending Only'}
+          </button>
+        </div>
+      )}
+
       {/* Metrics Row */}
       <div className="dashboard-stat-grid-modern" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '24px' }}>
-        <div className="stat-modern-card card-green">
+        <div className="stat-modern-card card-green" onClick={() => setStatusFilter('All')} style={{ cursor: 'pointer' }}>
           <div className="stat-modern-top">
             <div className="stat-modern-icon"><Building size={22} /></div>
             <span className="stat-modern-val">{totalUsersCount}</span>
@@ -273,7 +364,7 @@ export default function UsersManagementPage() {
           </div>
         </div>
 
-        <div className="stat-modern-card card-blue">
+        <div className="stat-modern-card card-blue" onClick={() => setStatusFilter('Active')} style={{ cursor: 'pointer' }}>
           <div className="stat-modern-top">
             <div className="stat-modern-icon"><UserCheck size={22} /></div>
             <span className="stat-modern-val">{activeUsersCount}</span>
@@ -283,13 +374,17 @@ export default function UsersManagementPage() {
           </div>
         </div>
 
-        <div className="stat-modern-card card-amber">
+        <div
+          className="stat-modern-card card-amber"
+          onClick={() => setStatusFilter('Pending')}
+          style={{ cursor: 'pointer', border: pendingUsersCount > 0 ? '2px solid #f59e0b' : undefined }}
+        >
           <div className="stat-modern-top">
-            <div className="stat-modern-icon"><Shield size={22} /></div>
-            <span className="stat-modern-val">{trialUsersCount}</span>
+            <div className="stat-modern-icon" style={{ color: '#d97706' }}><Shield size={22} /></div>
+            <span className="stat-modern-val" style={{ color: '#b45309' }}>{pendingUsersCount}</span>
           </div>
           <div className="stat-modern-bottom">
-            <span className="stat-modern-title">48-Hr Free Trials</span>
+            <span className="stat-modern-title">Pending Approvals</span>
           </div>
         </div>
 
@@ -311,7 +406,7 @@ export default function UsersManagementPage() {
             <Search size={16} className="trust-search-icon" />
             <input
               type="text"
-              placeholder="Search by Trust, Person, Email, Mobile or Reg No..."
+              placeholder="Search by Trust, Person, Email, Mobile, Reg No or Payment ID..."
               className="trust-input trust-search-input"
               style={{ width: '100%' }}
               value={search}
@@ -332,13 +427,14 @@ export default function UsersManagementPage() {
           </select>
           <select
             className="trust-select"
-            style={{ width: '150px', height: '40px' }}
+            style={{ width: '170px', height: '40px' }}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="All">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Trial">Trial</option>
+            <option value="Pending">Pending Approval ({pendingUsersCount})</option>
+            <option value="Active">Active ({activeUsersCount})</option>
+            <option value="Trial">Trial ({trialUsersCount})</option>
             <option value="Suspended">Suspended</option>
           </select>
         </div>
@@ -379,96 +475,138 @@ export default function UsersManagementPage() {
                 <th>Trust / Organization</th>
                 <th>Contact Person</th>
                 <th>Email &amp; Mobile</th>
-                <th>Assigned Plan</th>
+                <th>Plan &amp; Payment</th>
                 <th>Reg / PAN No</th>
                 <th style={{ textAlign: 'center' }}>Receipts</th>
-                <th style={{ textAlign: 'center' }}>Staff / Members</th>
+                <th style={{ textAlign: 'center' }}>Staff</th>
                 <th>Joined Date</th>
                 <th>Status</th>
                 <th style={{ textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map(u => (
-                <tr key={u._id}>
-                  <td>
-                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{u.trustName || u.name}</div>
-                    <span style={{ fontSize: '12px', color: '#64748b' }}>ID: {u._id}</span>
-                  </td>
-                  <td style={{ color: '#334155' }}>{u.contactPerson || u.name || 'Admin'}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#0f172a' }}>
-                      <Mail size={13} style={{ color: '#64748b' }} />
-                      <span>{u.email}</span>
-                    </div>
-                    {u.mobile && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                        <Phone size={12} style={{ color: '#94a3b8' }} />
-                        <span>{u.mobile}</span>
+              {filteredUsers.map(u => {
+                const isPending = u.status === 'Pending' || u.status === 'Pending Approval';
+                return (
+                  <tr key={u._id} style={{ backgroundColor: isPending ? '#fffdf7' : undefined }}>
+                    <td>
+                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{u.trustName || u.name}</div>
+                      <span style={{ fontSize: '11.5px', color: '#64748b' }}>ID: {u._id}</span>
+                    </td>
+                    <td style={{ color: '#334155' }}>{u.contactPerson || u.name || 'Admin'}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#0f172a' }}>
+                        <Mail size={13} style={{ color: '#64748b' }} />
+                        <span>{u.email}</span>
                       </div>
-                    )}
-                  </td>
-                  <td>
-                    <span className="badge-pill badge-info" style={{ fontWeight: 600 }}>
-                      {u.plan || 'Standard'}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: '12px', color: '#334155' }}>
-                      <strong>Reg:</strong> {u.registrationNo || 'N/A'}
-                    </div>
-                    {u.panNo && (
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        <strong>PAN:</strong> {u.panNo}
+                      {u.mobile && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                          <Phone size={12} style={{ color: '#94a3b8' }} />
+                          <span>{u.mobile}</span>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <span className="badge-pill badge-info" style={{ fontWeight: 600 }}>
+                        {u.plan || 'Standard'}
+                      </span>
+                      {u.paidAmount && (
+                        <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginTop: '3px' }}>
+                          ₹{Number(u.paidAmount).toLocaleString('en-IN')} Paid
+                        </div>
+                      )}
+                      {u.paymentId && (
+                        <div style={{ fontSize: '10.5px', color: '#64748b', fontFamily: 'monospace' }} title={`Payment ID: ${u.paymentId}`}>
+                          ID: {u.paymentId.slice(0, 10)}...
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '12px', color: '#334155' }}>
+                        <strong>Reg:</strong> {u.registrationNo || 'N/A'}
                       </div>
-                    )}
-                  </td>
-                  <td style={{ fontWeight: 600, color: '#0f172a', textAlign: 'center' }}>{u.receiptsCount || 0}</td>
-                  <td style={{ fontWeight: 600, color: '#10b981', textAlign: 'center' }}>{u.staffCount || 0}</td>
-                  <td style={{ fontSize: '13px', color: '#64748b' }}>{u.joinedDate || '10/01/2026'}</td>
-                  <td>
-                    <span className={`badge-pill ${u.status === 'Active' ? 'badge-success' : (u.status === 'Trial' ? 'badge-warning' : 'badge-danger')}`}>
-                      {u.status}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <button
-                        type="button"
-                        className="btn-table-action"
-                        onClick={() => navigate(`/superadmin/users/${u._id}`)}
-                        title="View Trust Details & Statistics"
-                      >
-                        <Eye size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-table-action"
-                        onClick={() => navigate(`/superadmin/new-user?id=${u._id}`)}
-                        title="Edit User Details"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-table-action"
-                        onClick={() => handleToggleStatus(u)}
-                        title={u.status === 'Active' ? 'Suspend Trust' : 'Activate Trust'}
-                      >
-                        {u.status === 'Active' ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-table-action delete"
-                        onClick={() => handleDeleteUser(u)}
-                        title="Delete User"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      {u.panNo && (
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                          <strong>PAN:</strong> {u.panNo}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ fontWeight: 600, color: '#0f172a', textAlign: 'center' }}>{u.receiptsCount || 0}</td>
+                    <td style={{ fontWeight: 600, color: '#10b981', textAlign: 'center' }}>{u.staffCount || 0}</td>
+                    <td style={{ fontSize: '13px', color: '#64748b' }}>{u.joinedDate || '10/01/2026'}</td>
+                    <td>
+                      {isPending ? (
+                        <span className="badge-pill badge-warning" style={{ backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', fontWeight: 700 }}>
+                          ⏳ Pending Approval
+                        </span>
+                      ) : (
+                        <span className={`badge-pill ${u.status === 'Active' ? 'badge-success' : (u.status === 'Trial' ? 'badge-warning' : 'badge-danger')}`}>
+                          {u.status}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        {isPending && (
+                          <button
+                            type="button"
+                            className="btn-table-action"
+                            style={{
+                              backgroundColor: '#ecfdf5',
+                              color: '#059669',
+                              borderColor: '#a7f3d0',
+                              padding: '5px 9px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontWeight: 700,
+                              fontSize: '11.5px',
+                              borderRadius: '4px'
+                            }}
+                            onClick={() => handleApproveUser(u)}
+                            title="Approve & Grant Admin Portal Access"
+                          >
+                            <CheckCircle2 size={13} />
+                            <span>Approve</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-table-action"
+                          onClick={() => navigate(`/superadmin/users/${u._id}`)}
+                          title="View Trust Details & Statistics"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-table-action"
+                          onClick={() => navigate(`/superadmin/new-user?id=${u._id}`)}
+                          title="Edit User Details"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-table-action"
+                          onClick={() => handleToggleStatus(u)}
+                          title={u.status === 'Active' ? 'Suspend Trust' : 'Activate Trust'}
+                        >
+                          {u.status === 'Active' ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-table-action delete"
+                          onClick={() => handleDeleteUser(u)}
+                          title="Delete User"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

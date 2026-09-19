@@ -75,6 +75,11 @@ export default function NewUserPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'mobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, mobile: numericVal }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -86,6 +91,28 @@ export default function NewUserPage() {
         type: 'error',
         title: 'Validation Error',
         message: 'Trust Name and Email ID are mandatory.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Email Address',
+        message: 'Please enter a valid email address (e.g. admin@trust.org).',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (formData.mobile && formData.mobile.length !== 10) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Mobile Number',
+        message: 'Mobile number must be exactly 10 digits.',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
       });
       return;
@@ -242,9 +269,11 @@ export default function NewUserPage() {
                 <input
                   type="tel"
                   name="mobile"
+                  maxLength={10}
+                  inputMode="numeric"
                   value={formData.mobile}
                   onChange={handleChange}
-                  placeholder="e.g. 9876543210"
+                  placeholder="10-digit mobile number"
                   style={inputStyle}
                 />
               </div>

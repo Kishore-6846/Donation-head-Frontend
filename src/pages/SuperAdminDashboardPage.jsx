@@ -110,6 +110,48 @@ export default function SuperAdminDashboardPage({ user }) {
         </div>
       </div>
 
+      {/* Pending Registrations Alert */}
+      {(stats.users?.pending > 0) && (
+        <div style={{
+          backgroundColor: '#fffbeb',
+          border: '1px solid #fde68a',
+          borderRadius: '10px',
+          padding: '12px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          flexWrap: 'wrap',
+          boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>⏳</span>
+            <div>
+              <strong style={{ color: '#92400e', fontSize: '13.5px' }}>
+                {stats.users.pending} New Trust Admin Account{stats.users.pending > 1 ? 's' : ''} Awaiting Approval:
+              </strong>
+              <span style={{ color: '#b45309', fontSize: '13px', marginLeft: '6px' }}>
+                Plan subscriptions have been paid. Admin portal access is pending your approval.
+              </span>
+            </div>
+          </div>
+          <Link
+            to="/superadmin/users"
+            className="btn-trust-primary"
+            style={{
+              backgroundColor: '#d97706',
+              borderColor: '#d97706',
+              fontSize: '12.5px',
+              padding: '6px 14px',
+              textDecoration: 'none'
+            }}
+          >
+            Review &amp; Approve &rarr;
+          </Link>
+        </div>
+      )}
+
       {/* 2. 4 Key Stat Cards (Plans, Users, Employees, Receipts) */}
       <div className="dashboard-stat-grid-modern" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '28px' }}>
         {/* Card 1: Plans */}
@@ -146,8 +188,8 @@ export default function SuperAdminDashboardPage({ user }) {
           </div>
           <div className="stat-modern-bottom" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="stat-modern-title">Users (Trusts)</span>
-            <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: 600 }}>
-              {stats.users?.active ?? 0} Active &rarr;
+            <span style={{ fontSize: '11px', color: stats.users?.pending > 0 ? '#b45309' : '#0369a1', fontWeight: 700 }}>
+              {stats.users?.pending > 0 ? `⏳ ${stats.users.pending} Pending` : `${stats.users?.active ?? 0} Active`} &rarr;
             </span>
           </div>
         </Link>
@@ -333,8 +375,19 @@ export default function SuperAdminDashboardPage({ user }) {
                         </td>
                         <td style={{ fontSize: '11.5px', color: '#64748b', whiteSpace: 'nowrap' }}>{u.joinedDate || '10/01/2026'}</td>
                         <td>
-                          <span className={`badge-pill ${u.status === 'Active' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '10.5px', padding: '3px 8px', whiteSpace: 'nowrap' }}>
-                            {u.status}
+                          <span
+                            className={`badge-pill ${u.status === 'Active' ? 'badge-success' : 'badge-warning'}`}
+                            style={{
+                              fontSize: '10.5px',
+                              padding: '3px 8px',
+                              whiteSpace: 'nowrap',
+                              backgroundColor: (u.status === 'Pending' || u.status === 'Pending Approval') ? '#fef3c7' : undefined,
+                              color: (u.status === 'Pending' || u.status === 'Pending Approval') ? '#b45309' : undefined,
+                              border: (u.status === 'Pending' || u.status === 'Pending Approval') ? '1px solid #fde68a' : undefined,
+                              fontWeight: (u.status === 'Pending' || u.status === 'Pending Approval') ? 700 : 600
+                            }}
+                          >
+                            {(u.status === 'Pending' || u.status === 'Pending Approval') ? '⏳ Pending' : u.status}
                           </span>
                         </td>
                       </tr>

@@ -67,12 +67,27 @@ export default function SuperAdminRegisterPage({ onLoginSuccess }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'mobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData((prev) => ({ ...prev, [name]: numericVal }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setError('Please enter a valid Official Email address (e.g. admin@donationreceipt.in).');
+      return;
+    }
+
+    if (!formData.mobile || formData.mobile.length !== 10) {
+      setError('Mobile number must be exactly 10 digits.');
+      return;
+    }
 
     if (!formData.password || formData.password.length < 6) {
       setError('Please enter a password of at least 6 characters.');
@@ -437,6 +452,8 @@ export default function SuperAdminRegisterPage({ onLoginSuccess }) {
                       type="tel"
                       name="mobile"
                       required
+                      maxLength={10}
+                      inputMode="numeric"
                       placeholder="10-digit mobile number"
                       value={formData.mobile}
                       onChange={handleChange}

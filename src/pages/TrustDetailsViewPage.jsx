@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
+import SimplePopup from '../components/SimplePopup';
 import {
   Building,
   Mail,
@@ -37,6 +38,52 @@ export default function TrustDetailsViewPage() {
   const [receiptSearch, setReceiptSearch] = useState('');
   const [donorSearch, setDonorSearch] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
+  const [popup, setPopup] = useState({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+    showCancel: false,
+    confirmText: 'OK',
+    onConfirm: null
+  });
+
+  const handleApproveTrust = async () => {
+    if (!data?.user?._id) return;
+    setPopup({
+      isOpen: true,
+      type: 'success',
+      title: 'Approve Trust Account?',
+      message: `Are you sure you want to approve "${data.user.trustName || data.user.name}"? This will activate their subscription (${data.user.plan || 'Standard'} Plan) and grant Admin Portal login access immediately.`,
+      showCancel: true,
+      confirmText: 'Yes, Approve & Activate',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setPopup(p => ({ ...p, isOpen: false }));
+        try {
+          const res = await fetch(`/api/users/${data.user._id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'Active' })
+          });
+          const result = await res.json();
+          if (result.success) {
+            fetchTrustDetails();
+            setPopup({
+              isOpen: true,
+              type: 'success',
+              title: 'Trust Account Approved!',
+              message: `Trust account "${data.user.trustName || data.user.name}" is now Active. The trust admin can log in right away.`,
+              confirmText: 'OK',
+              onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+            });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+  };
 
   const fetchTrustDetails = async () => {
     try {
@@ -226,6 +273,25 @@ export default function TrustDetailsViewPage() {
         </div>
 
         <div className="mint-hero-right" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {(user.status === 'Pending' || user.status === 'Pending Approval') && (
+            <button
+              type="button"
+              className="btn-trust-primary"
+              style={{
+                backgroundColor: '#059669',
+                borderColor: '#059669',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '10px 18px',
+                boxShadow: '0 3px 8px rgba(5, 150, 105, 0.3)'
+              }}
+              onClick={handleApproveTrust}
+            >
+              <CheckCircle2 size={16} />
+              <span>Approve Trust</span>
+            </button>
+          )}
           <button
             type="button"
             className="btn-trust-secondary"
@@ -246,6 +312,57 @@ export default function TrustDetailsViewPage() {
           </button>
         </div>
       </div>
+
+      {/* Pending Approval Action Banner */}
+      {(user.status === 'Pending' || user.status === 'Pending Approval') && (
+        <div style={{
+          backgroundColor: '#fffbeb',
+          border: '1px solid #fde68a',
+          borderRadius: '10px',
+          padding: '18px 24px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '20px',
+          flexWrap: 'wrap',
+          boxShadow: '0 4px 12px rgba(245, 158, 11, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Shield size={24} />
+            </div>
+            <div>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#92400e' }}>
+                Account Awaiting Super Admin Approval
+              </div>
+              <div style={{ fontSize: '13.5px', color: '#b45309', marginTop: '3px' }}>
+                This trust admin has registered and completed subscription payment ({user.plan || 'Standard'} Plan{user.paidAmount ? ` • ₹${Number(user.paidAmount).toLocaleString('en-IN')}` : ''}{user.paymentId ? ` • Ref: ${user.paymentId}` : ''}).
+                Admin portal access remains locked until approval.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn-trust-primary"
+            style={{
+              backgroundColor: '#059669',
+              borderColor: '#059669',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 22px',
+              fontSize: '14.5px',
+              fontWeight: 700,
+              boxShadow: '0 4px 10px rgba(5, 150, 105, 0.3)'
+            }}
+            onClick={handleApproveTrust}
+          >
+            <CheckCircle2 size={18} />
+            <span>Approve &amp; Activate Trust</span>
+          </button>
+        </div>
+      )}
 
       {/* KPI Stats Row */}
       <div className="dashboard-stat-grid-modern" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '24px' }}>
@@ -821,6 +938,18 @@ export default function TrustDetailsViewPage() {
           </div>
         </div>
       )}
+      {/* Popup */}
+      <SimplePopup
+        isOpen={popup.isOpen}
+        type={popup.type}
+        title={popup.title}
+        message={popup.message}
+        showCancel={popup.showCancel}
+        confirmText={popup.confirmText}
+        cancelText={popup.cancelText}
+        onConfirm={popup.onConfirm}
+        onCancel={() => setPopup(p => ({ ...p, isOpen: false }))}
+      />
     </div>
   );
 }

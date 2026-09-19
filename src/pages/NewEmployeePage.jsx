@@ -67,6 +67,11 @@ export default function NewEmployeePage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'phone') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, phone: numericVal }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -89,6 +94,28 @@ export default function NewEmployeePage() {
         type: 'error',
         title: 'Validation Error',
         message: 'Employee Name and Email ID are mandatory.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Email Address',
+        message: 'Please enter a valid corporate email address (e.g. name@domain.com).',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (formData.phone && formData.phone.length !== 10) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Mobile Number',
+        message: 'Mobile number must be exactly 10 digits.',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
       });
       return;
@@ -245,9 +272,11 @@ export default function NewEmployeePage() {
                 <input
                   type="tel"
                   name="phone"
+                  maxLength={10}
+                  inputMode="numeric"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="e.g. 9840123456"
+                  placeholder="10-digit mobile number"
                   style={inputStyle}
                 />
               </div>

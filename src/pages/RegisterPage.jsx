@@ -71,6 +71,16 @@ export default function RegisterPage({ onLoginSuccess }) {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Pending Approval Modal State
+  const [pendingApprovalModal, setPendingApprovalModal] = useState({
+    isOpen: false,
+    trustName: '',
+    email: '',
+    plan: '',
+    paymentId: '',
+    amount: ''
+  });
+
   // Dynamically load active plans from SuperAdmin plans API
   useEffect(() => {
     fetch('/api/plans?status=Active')
@@ -101,8 +111,44 @@ export default function RegisterPage({ onLoginSuccess }) {
       .catch(err => console.error('Error fetching plans in register page:', err));
   }, []);
 
+  // Helper to load Razorpay checkout script if not present
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const getSelectedPlanPrice = () => {
+    const selected = plans.find(p => p.name === formData.plan || p._id === formData.plan);
+    if (selected && Number(selected.price)) {
+      return Number(selected.price);
+    }
+    const nameLower = (formData.plan || '').toLowerCase();
+    if (nameLower.includes('enterprise')) return 10000;
+    if (nameLower.includes('advanced')) return 7000;
+    if (nameLower.includes('starter')) return 1999;
+    return 4000; // Standard default
+  };
+
+  const planBasePrice = getSelectedPlanPrice();
+  const planGst = parseFloat((planBasePrice * 0.18).toFixed(2));
+  const planGrandTotal = (planBasePrice + planGst).toFixed(2);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'mobile' || name === 'contactPersonMobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData((prev) => ({ ...prev, [name]: numericVal }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -130,6 +176,31 @@ export default function RegisterPage({ onLoginSuccess }) {
     e.preventDefault();
     setError('');
 
+    if (!formData.trustName.trim()) {
+      setError('Please enter your Trust / NGO Name.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setError('Please enter a valid Trust Email address (e.g. admin@yourngo.org).');
+      return;
+    }
+
+    if (!formData.mobile || formData.mobile.length !== 10) {
+      setError('Mobile number must be exactly 10 digits.');
+      return;
+    }
+
+    if (formData.contactPersonEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactPersonEmail.trim())) {
+      setError('Please enter a valid Contact Person Email address.');
+      return;
+    }
+
+    if (formData.contactPersonMobile && formData.contactPersonMobile.length !== 10) {
+      setError('Contact Person Mobile number must be exactly 10 digits.');
+      return;
+    }
+
     if (!formData.password || formData.password.length < 6) {
       setError('Please enter a password of at least 6 characters.');
       return;
@@ -148,74 +219,118 @@ export default function RegisterPage({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      const payload = {
-        ...formData,
-        logo: logoPreview || ''
-      };
+      // 1. Ensure Razorpay Checkout script is loaded
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded || !window.Razorpay) {
+        throw new Error('Could not load Razorpay payment gateway. Please check your internet connection.');
+      }
 
-      const res = await fetch('/api/auth/register', {
+      // 2. Create order on backend for plan payment
+      const orderRes = await fetch('/api/payment/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          amount: parseFloat(planGrandTotal),
+          plan: formData.plan,
+          name: formData.trustName || formData.contactPerson,
+          email: formData.email,
+          mobile: formData.mobile
+        })
       });
 
-      const data = await res.json();
+      const orderData = await orderRes.json();
+      if (!orderData.success) {
+        throw new Error(orderData.message || 'Failed to initialize subscription payment order');
+      }
 
-      const rawPrefix = (formData.trustName || 'REC')
-        .replace(/[^a-zA-Z]/g, '')
-        .slice(0, 4)
-        .toUpperCase() || 'REC';
+      // 3. Open Razorpay Checkout Window
+      const options = {
+        key: orderData.keyId || 'rzp_test_TdnRfnHpDeyWqd',
+        amount: orderData.order.amount,
+        currency: orderData.order.currency || 'INR',
+        name: 'DonationReceipt.in',
+        description: `${formData.plan} Plan Subscription Registration`,
+        image: 'https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?w=128&auto=format&fit=crop&q=80',
+        ...(orderData.isRealOrder && orderData.order?.id ? { order_id: orderData.order.id } : {}),
+        prefill: {
+          name: formData.contactPerson || formData.trustName,
+          email: formData.email,
+          contact: formData.mobile
+        },
+        notes: {
+          trustName: formData.trustName,
+          plan: formData.plan,
+          state: formData.state,
+          amount: planGrandTotal
+        },
+        theme: {
+          color: '#00a651'
+        },
+        handler: async function (paymentResponse) {
+          setLoading(true);
+          try {
+            const rawPrefix = (formData.trustName || 'REC')
+              .replace(/[^a-zA-Z]/g, '')
+              .slice(0, 4)
+              .toUpperCase() || 'REC';
 
-      const registeredProfile = {
-        name: formData.trustName,
-        email: formData.email,
-        phone: formData.mobile,
-        address: formData.address,
-        state: formData.state,
-        registrationNo: formData.registrationNo || ('REG-' + Date.now().toString().slice(-6)),
-        panNo: formData.panNo,
-        website: formData.website,
-        contactPerson: formData.contactPerson,
-        contactPersonMobile: formData.contactPersonMobile || formData.mobile,
-        contactPersonEmail: formData.contactPersonEmail || formData.email,
-        logo: logoPreview || '',
-        emailSubject: `Thank You & Stay Connected! - ${formData.trustName}`,
-        emailBody: `Thank you for your generous support! Your kindness fuels our mission at ${formData.trustName}. Grateful for you!\n${formData.website || ''} | ${formData.mobile || ''} | ${formData.email || ''}`,
-        signatoryName: formData.contactPerson,
-        signatoryPan: formData.panNo,
-        registrationType: '12A',
-        reg12ANo: formData.registrationNo || ('REG-' + Date.now().toString().slice(-6)),
-        reg12ADate: new Date().toISOString().split('T')[0],
-        fcraNo: '',
-        receiptPrefix: `${rawPrefix}/2026-27/`,
-        receiptStartNumber: '1',
-        receiptWatermarkText: rawPrefix,
-        plan: formData.plan || 'Standard'
+            const payload = {
+              ...formData,
+              logo: logoPreview || '',
+              status: 'Pending',
+              paymentStatus: 'Paid',
+              paymentId: paymentResponse.razorpay_payment_id || 'pay_success_' + Date.now(),
+              orderId: paymentResponse.razorpay_order_id || '',
+              paidAmount: planGrandTotal,
+              receiptPrefix: `${rawPrefix}/2026-27/`,
+              receiptStartNumber: '1',
+              receiptWatermarkText: rawPrefix
+            };
+
+            const regRes = await fetch('/api/auth/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            const regData = await regRes.json();
+
+            if (regData.success) {
+              setPendingApprovalModal({
+                isOpen: true,
+                trustName: formData.trustName,
+                email: formData.email,
+                plan: formData.plan,
+                paymentId: paymentResponse.razorpay_payment_id || 'pay_success_' + Date.now(),
+                amount: planGrandTotal
+              });
+            } else {
+              setError(regData.message || 'Registration error occurred. Please contact support.');
+            }
+          } catch (regErr) {
+            console.error('Registration processing error:', regErr);
+            setError('Payment succeeded (' + (paymentResponse.razorpay_payment_id || '') + '), but registration encountered an error. Please contact administrator.');
+          } finally {
+            setLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setLoading(false);
+          }
+        }
       };
 
-      if (data.success) {
-        setSuccessMsg(data.message || 'Registration successful! Your 48-Hour Free Trial has started.');
-        const fullUser = {
-          ...data.user,
-          ...registeredProfile,
-          trustName: formData.trustName
-        };
+      const razorpayInstance = new window.Razorpay(options);
+      razorpayInstance.on('payment.failed', function (failedResponse) {
+        setLoading(false);
+        setError(failedResponse.error?.description || 'Subscription payment was not completed. Please try again to complete registration.');
+      });
 
-        setTrustSession(fullUser, data.token);
-
-        if (onLoginSuccess) {
-          onLoginSuccess(fullUser);
-        }
-
-        setTimeout(() => {
-          navigate('/trust/');
-        }, 1200);
-      } else {
-        setError(data.message || 'Registration failed. Please check your information.');
-      }
+      razorpayInstance.open();
     } catch (err) {
-      setError('Unable to connect to server. Please check your connection and try again.');
-    } finally {
+      console.error('Payment launch error:', err);
+      setError(err.message || 'Unable to start payment checkout. Please check your connection and try again.');
       setLoading(false);
     }
   };
@@ -437,6 +552,8 @@ export default function RegisterPage({ onLoginSuccess }) {
                       type="tel"
                       name="mobile"
                       required
+                      maxLength={10}
+                      inputMode="numeric"
                       placeholder="10-digit mobile number"
                       value={formData.mobile}
                       onChange={handleChange}
@@ -550,6 +667,20 @@ export default function RegisterPage({ onLoginSuccess }) {
                     {/* <p style={{ fontSize: '11.5px', color: '#64748b', margin: '4px 0 0 0' }}>
                       Includes 48-Hour Free Trial access to your selected plan features.
                     </p> */}
+                    <div style={{ marginTop: '8px', padding: '10px 14px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '12.5px', color: '#166534' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                        <span>Base Subscription Fee:</span>
+                        <span style={{ fontWeight: 600 }}>₹{planBasePrice.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                        <span>GST (18%):</span>
+                        <span style={{ fontWeight: 600 }}>₹{planGst.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, borderTop: '1px dashed #86efac', paddingTop: '4px', fontSize: '13px', color: '#065f46' }}>
+                        <span>Total Payable at Registration:</span>
+                        <span>₹{Number(planGrandTotal).toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Trust/NGO Registration Number */}
@@ -576,18 +707,18 @@ export default function RegisterPage({ onLoginSuccess }) {
                     />
                   </div>
 
-                  {/* Trust/NGO PAN */}
+                  {/* Trust/NGO PAN Number */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
-                      Trust/NGO PAN
+                      Trust/NGO PAN Number
                     </label>
                     <input
                       type="text"
                       name="panNo"
-                      placeholder="e.g. AAVCA0216A"
                       maxLength={10}
+                      placeholder="e.g. AAATT1234K"
                       value={formData.panNo}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, panNo: e.target.value.toUpperCase() }))}
+                      onChange={(e) => setFormData(p => ({ ...p, panNo: e.target.value.toUpperCase() }))}
                       style={{
                         width: '100%',
                         padding: '10px 14px',
@@ -595,22 +726,22 @@ export default function RegisterPage({ onLoginSuccess }) {
                         border: '1px solid #ced4da',
                         borderRadius: '4px',
                         outline: 'none',
-                        textTransform: 'uppercase',
                         fontFamily: 'inherit',
-                        boxSizing: 'border-box'
+                        boxSizing: 'border-box',
+                        textTransform: 'uppercase'
                       }}
                     />
                   </div>
 
                   {/* Website */}
-                  {/* <div>
+                  <div>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
                       Website
                     </label>
                     <input
-                      type="url"
+                      type="text"
                       name="website"
-                      placeholder="https://yourngo.org"
+                      placeholder="e.g. https://www.yourngo.org"
                       value={formData.website}
                       onChange={handleChange}
                       style={{
@@ -624,18 +755,17 @@ export default function RegisterPage({ onLoginSuccess }) {
                         boxSizing: 'border-box'
                       }}
                     />
-                  </div> */}
+                  </div>
 
-                  {/* Contact Person * */}
+                  {/* Contact Person Name */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
-                      Contact Person <span style={{ color: '#ef4444' }}>*</span>
+                      Contact Person Name
                     </label>
                     <input
                       type="text"
                       name="contactPerson"
-                      required
-                      placeholder="Authorized Person / Trustee Name"
+                      placeholder="e.g. Ramesh Kumar"
                       value={formData.contactPerson}
                       onChange={handleChange}
                       style={{
@@ -685,7 +815,9 @@ export default function RegisterPage({ onLoginSuccess }) {
                       type="tel"
                       name="contactPersonMobile"
                       required
-                      placeholder="Contact person mobile number"
+                      maxLength={10}
+                      inputMode="numeric"
+                      placeholder="10-digit mobile number"
                       value={formData.contactPersonMobile}
                       onChange={handleChange}
                       style={{
@@ -704,10 +836,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                   {/* Trust/NGO Logo (Type: jpg, Max. size: 2MB) */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
-                      Trust/NGO Logo{' '}
-                      <span style={{ fontSize: '12px', fontWeight: '400', color: '#64748b' }}>
-                        (Type: jpg, Max. size: 2MB)
-                      </span>
+                      Trust/NGO Logo (Type: jpg, Max. size: 2MB)
                     </label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                       <input
@@ -729,18 +858,6 @@ export default function RegisterPage({ onLoginSuccess }) {
                         </div>
                       )}
                     </div>
-                    {/* <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '6px', marginBottom: 0 }}>
-                      Your logo may be displayed in{' '}
-                      <a
-                        href="https://donationreceipt.in/our-clients.php"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#00a651', fontWeight: '600', textDecoration: 'underline' }}
-                      >
-                        Our Clients
-                      </a>{' '}
-                      section.
-                    </p> */}
                   </div>
                 </div>
 
@@ -766,7 +883,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                   </label>
                 </div>
 
-                {/* Submit Button: Register */}
+                {/* Submit Button: Pay & Register */}
                 <button
                   type="submit"
                   disabled={loading}
@@ -775,18 +892,26 @@ export default function RegisterPage({ onLoginSuccess }) {
                     backgroundColor: '#00a651',
                     color: '#ffffff',
                     border: 'none',
-                    padding: '13px',
-                    fontSize: '16px',
+                    padding: '14px',
+                    fontSize: '15.5px',
                     fontWeight: '700',
                     borderRadius: '4px',
-                    cursor: 'pointer',
+                    cursor: loading ? 'not-allowed' : 'pointer',
                     marginTop: '22px',
                     boxShadow: '0 3px 10px rgba(0, 166, 81, 0.3)',
                     transition: 'background-color 0.2s',
-                    letterSpacing: '-0.2px'
+                    letterSpacing: '-0.2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
                   }}
                 >
-                  {loading ? 'Submitting Registration...' : 'Register'}
+                  {loading ? (
+                    <span>Opening Razorpay Payment Gateway...</span>
+                  ) : (
+                    <span>Proceed to Pay ₹{Number(planGrandTotal).toLocaleString('en-IN')} &amp; Register</span>
+                  )}
                 </button>
               </form>
 
@@ -832,8 +957,7 @@ export default function RegisterPage({ onLoginSuccess }) {
                   gap: '4px'
                 }}
               >
-                <span>SuperAdmin Login</span>
-                <ArrowRight size={13} />
+                Go To Super Admin Portal <ArrowRight size={13} />
               </Link>
             </div>
           </div>
@@ -852,6 +976,125 @@ export default function RegisterPage({ onLoginSuccess }) {
           </div>
         </div>
       </div>
+
+      {/* Pending Super Admin Approval Modal */}
+      {pendingApprovalModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            maxWidth: '520px',
+            width: '100%',
+            overflow: 'hidden',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          }}>
+            {/* Modal Header */}
+            <div style={{ backgroundColor: '#00a651', padding: '24px 20px', textAlign: 'center', color: '#ffffff' }}>
+              <div style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 12px auto'
+              }}>
+                <CheckCircle2 size={32} color="#ffffff" />
+              </div>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: '700' }}>
+                Registration &amp; Payment Successful!
+              </h3>
+              <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>
+                Your payment of ₹{pendingApprovalModal.amount} was received via Razorpay
+              </p>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '24px' }}>
+              <div style={{
+                backgroundColor: '#fef3c7',
+                border: '1px solid #fde68a',
+                borderRadius: '8px',
+                padding: '14px 16px',
+                marginBottom: '18px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', fontWeight: '700', fontSize: '14px', marginBottom: '6px' }}>
+                  <span>⏳</span>
+                  <span>Status: Pending Super Admin Approval</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', color: '#78350f', lineHeight: 1.5 }}>
+                  Your trust organization registration is currently awaiting verification and activation by the <strong>Super Administrator</strong>. Once approved, you will be able to log in to your admin portal.
+                </p>
+              </div>
+
+              {/* Order Info Summary */}
+              <div style={{
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '14px 16px',
+                fontSize: '13px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748b' }}>Trust / Org Name:</span>
+                  <span style={{ fontWeight: '600', color: '#0f172a' }}>{pendingApprovalModal.trustName}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748b' }}>Login Email:</span>
+                  <span style={{ fontWeight: '600', color: '#0f172a' }}>{pendingApprovalModal.email}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748b' }}>Subscription Plan:</span>
+                  <span style={{ fontWeight: '600', color: '#059669' }}>{pendingApprovalModal.plan} Plan</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748b' }}>Payment ID:</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#334155' }}>{pendingApprovalModal.paymentId}</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={{
+                  width: '100%',
+                  backgroundColor: '#00a651',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '12px 16px',
+                  borderRadius: '6px',
+                  fontSize: '15px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(0, 166, 81, 0.3)'
+                }}
+                onClick={() => {
+                  setPendingApprovalModal({ isOpen: false });
+                  navigate('/trust/login');
+                }}
+              >
+                Go to Login Page →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Website Footer Area */}
       <footer style={{ backgroundColor: '#ffffff', borderTop: '1px solid #eef2f5', padding: '20px 0' }}>

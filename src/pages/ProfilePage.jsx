@@ -52,11 +52,26 @@ export default function ProfilePage({ user, onUpdateUser }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'phone' || name === 'mobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setProfile(prev => ({ ...prev, [name]: numericVal }));
+      return;
+    }
     setProfile(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSave = (e) => {
     e.preventDefault();
+
+    if (profile.phone && profile.phone.length !== 10) {
+      alert('Phone number must be exactly 10 digits.');
+      return;
+    }
+
+    if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim())) {
+      alert('Please enter a valid email address.');
+      return;
+    }
 
     const updatedUser = {
       ...(user || {}),
@@ -244,6 +259,9 @@ export default function ProfilePage({ user, onUpdateUser }) {
                 <input
                   type="tel"
                   name="phone"
+                  maxLength={10}
+                  inputMode="numeric"
+                  placeholder="10-digit mobile number"
                   className="trust-input"
                   style={{ width: '100%' }}
                   value={profile.phone}

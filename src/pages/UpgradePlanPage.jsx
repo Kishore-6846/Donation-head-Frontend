@@ -161,6 +161,11 @@ export default function UpgradePlanPage({ user }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'mobile') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, mobile: numericVal }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -220,6 +225,28 @@ export default function UpgradePlanPage({ user }) {
         type: 'error',
         title: 'Required Details',
         message: 'Please complete all required fields marked with *.',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Email Address',
+        message: 'Please enter a valid email address (e.g. admin@trust.org).',
+        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+      });
+      return;
+    }
+
+    if (formData.mobile.trim().length !== 10) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid Mobile Number',
+        message: 'Mobile number must be exactly 10 digits.',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
       });
       return;
@@ -429,12 +456,12 @@ export default function UpgradePlanPage({ user }) {
                       borderRadius: '12px',
                       overflow: 'hidden',
                       backgroundColor: '#ffffff',
-                      border: isCurrentPlan
-                        ? '2px solid #0284c7'
-                        : (isSelected ? '2px solid #28a745' : '1px solid #dee2e6'),
-                      boxShadow: isCurrentPlan
-                        ? '0 6px 20px rgba(2, 132, 199, 0.18)'
-                        : (isSelected ? '0 6px 20px rgba(40, 167, 69, 0.22)' : '0 1px 3px rgba(0,0,0,0.04)'),
+                      border: isSelected
+                        ? '2px solid #28a745'
+                        : (isCurrentPlan ? '2px solid #28a745' : '1px solid #dee2e6'),
+                      boxShadow: isSelected
+                        ? '0 6px 20px rgba(40, 167, 69, 0.25)'
+                        : '0 1px 3px rgba(0,0,0,0.04)',
                       display: 'flex',
                       flexDirection: 'column',
                       position: 'relative',
@@ -449,12 +476,12 @@ export default function UpgradePlanPage({ user }) {
                           top: '10px',
                           right: '10px',
                           backgroundColor: '#ffffff',
-                          color: '#0284c7',
-                          fontSize: '10px',
+                          color: '#166534',
+                          fontSize: '10.5px',
                           fontWeight: '800',
-                          padding: '3px 8px',
+                          padding: '3px 9px',
                           borderRadius: '12px',
-                          boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '4px',
@@ -462,19 +489,18 @@ export default function UpgradePlanPage({ user }) {
                           zIndex: 2
                         }}
                       >
-                        <ShieldCheck size={12} strokeWidth={2.5} />
+                        <ShieldCheck size={13} color="#166534" strokeWidth={2.5} />
                         <span>CURRENT PLAN</span>
                       </div>
                     )}
 
-                    {/* Top Portion */}
+                    {/* Top Green Portion - Original #28a745 Green */}
                     <div
                       style={{
-                        backgroundColor: isCurrentPlan ? '#0284c7' : (isSelected ? '#28a745' : '#475569'),
+                        backgroundColor: '#28a745',
                         color: '#ffffff',
                         padding: '18px 16px',
-                        textAlign: 'center',
-                        transition: 'background-color 0.2s ease'
+                        textAlign: 'center'
                       }}
                     >
                       <div style={{ fontSize: '18px', fontWeight: '700' }}>{p.name}</div>
@@ -488,11 +514,11 @@ export default function UpgradePlanPage({ user }) {
                     <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#212529' }}>
-                          <Check size={16} color={isCurrentPlan ? '#0284c7' : '#28a745'} strokeWidth={3} />
+                          <Check size={16} color="#28a745" strokeWidth={3} />
                           <span>{p.adminUsers} Admin User</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#212529' }}>
-                          <Check size={16} color={isCurrentPlan ? '#0284c7' : '#28a745'} strokeWidth={3} />
+                          <Check size={16} color="#28a745" strokeWidth={3} />
                           <span>{p.staffUsers}</span>
                         </div>
                       </div>
@@ -503,13 +529,13 @@ export default function UpgradePlanPage({ user }) {
                           type="button"
                           disabled
                           style={{
-                            backgroundColor: '#f0f9ff',
-                            color: '#0284c7',
-                            border: '1.5px solid #bae6fd',
-                            borderRadius: '6px',
-                            padding: '9px 0',
+                            backgroundColor: '#f0fdf4',
+                            color: '#166534',
+                            border: '1.5px solid #86efac',
+                            borderRadius: '4px',
+                            padding: '8px 0',
                             width: '100%',
-                            fontWeight: '700',
+                            fontWeight: '600',
                             fontSize: '13px',
                             display: 'flex',
                             alignItems: 'center',
@@ -518,7 +544,7 @@ export default function UpgradePlanPage({ user }) {
                             cursor: 'default'
                           }}
                         >
-                          <Check size={15} strokeWidth={3} />
+                          <Check size={15} color="#166534" strokeWidth={3} />
                           <span>Your Current Plan</span>
                         </button>
                       ) : isSelected ? (
@@ -528,20 +554,19 @@ export default function UpgradePlanPage({ user }) {
                             backgroundColor: '#28a745',
                             color: '#ffffff',
                             border: 'none',
-                            borderRadius: '6px',
-                            padding: '9px 0',
+                            borderRadius: '4px',
+                            padding: '8px 0',
                             width: '100%',
-                            fontWeight: '700',
+                            fontWeight: '600',
                             fontSize: '13.5px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             gap: '6px',
-                            cursor: 'default',
-                            boxShadow: '0 2px 6px rgba(40, 167, 69, 0.35)'
+                            cursor: 'default'
                           }}
                         >
-                          <Check size={16} strokeWidth={3} />
+                          <Check size={15} strokeWidth={3} />
                           <span>Selected for Upgrade</span>
                         </button>
                       ) : (
@@ -551,9 +576,9 @@ export default function UpgradePlanPage({ user }) {
                           style={{
                             backgroundColor: '#ffffff',
                             color: '#28a745',
-                            border: '1.5px solid #28a745',
-                            borderRadius: '6px',
-                            padding: '9px 0',
+                            border: '1px solid #28a745',
+                            borderRadius: '4px',
+                            padding: '8px 0',
                             width: '100%',
                             fontWeight: '600',
                             fontSize: '13.5px',
@@ -664,8 +689,11 @@ export default function UpgradePlanPage({ user }) {
                   Mobile <span style={{ color: '#dc3545' }}>*</span>
                 </label>
                 <input
-                  type="text"
+                  type="tel"
                   name="mobile"
+                  maxLength={10}
+                  inputMode="numeric"
+                  placeholder="10-digit mobile number"
                   value={formData.mobile}
                   onChange={handleChange}
                   required
