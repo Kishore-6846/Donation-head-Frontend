@@ -46,6 +46,38 @@ export default function SimplePopup({
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Close 'X' Button at Top Right */}
+        <button
+          type="button"
+          onClick={onCancel || onConfirm}
+          aria-label="Close modal"
+          style={{
+            position: 'absolute',
+            top: '12px',
+            right: '12px',
+            background: 'transparent',
+            border: 'none',
+            color: '#94a3b8',
+            cursor: 'pointer',
+            padding: '4px',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'color 0.15s ease, background-color 0.15s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.color = '#334155';
+            e.currentTarget.style.backgroundColor = '#f1f5f9';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+        >
+          <X size={18} strokeWidth={2.2} />
+        </button>
+
         {/* Top Icon Badge */}
         <div style={{ marginBottom: '14px', display: 'flex', justifyContent: 'center' }}>
           {type === 'confirm' ? (

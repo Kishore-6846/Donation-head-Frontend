@@ -13,6 +13,56 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successBanner, setSuccessBanner] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const clearFieldError = (fieldName) => {
+    if (fieldErrors[fieldName]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[fieldName];
+        return next;
+      });
+    }
+  };
+
+  const getFieldStyle = (fieldName, extraStyle = {}) => {
+    const hasErr = Boolean(fieldErrors[fieldName]);
+    return {
+      width: '100%',
+      padding: '10px 14px',
+      fontSize: '14px',
+      border: hasErr ? '1.5px solid #ef4444' : '1px solid #ced4da',
+      borderRadius: '4px',
+      outline: 'none',
+      fontFamily: 'inherit',
+      boxSizing: 'border-box',
+      backgroundColor: hasErr ? '#fef2f2' : '#ffffff',
+      boxShadow: hasErr ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+      transition: 'border-color 0.2s, background-color 0.2s, box-shadow 0.2s',
+      ...extraStyle
+    };
+  };
+
+  const renderFieldError = (fieldName) => {
+    if (!fieldErrors[fieldName]) return null;
+    return (
+      <div
+        style={{
+          color: '#ef4444',
+          fontSize: '12px',
+          marginTop: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          fontWeight: '500',
+          textAlign: 'left'
+        }}
+      >
+        <AlertCircle size={13} style={{ flexShrink: 0 }} />
+        <span>{fieldErrors[fieldName]}</span>
+      </div>
+    );
+  };
 
   // Forgot Password Modal States
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -152,16 +202,35 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
     setSuccessBanner('');
+
+    const errors = {};
+    const trimmedUser = (username || '').trim();
+    if (!trimmedUser) {
+      errors.username = 'Super Admin email address is required.';
+    } else if (!trimmedUser.includes('@') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedUser)) {
+      errors.username = 'Please enter a valid email address (e.g. admin@donationreceipt.in).';
+    }
+
+    if (!password) {
+      errors.password = 'Password is required.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setFieldErrors({});
+    setLoading(true);
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username,
+          username: trimmedUser,
           password,
           isSuperAdmin: true,
           role: 'Super Admin'
@@ -288,7 +357,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                 </div>
               )}
 
-              <form onSubmit={handleLogin}>
+              <form onSubmit={handleLogin} noValidate>
                 {/* Email Address */}
                 <div style={{ marginBottom: '18px' }}>
                   <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', color: '#333333', marginBottom: '6px' }}>
@@ -296,22 +365,16 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                   </label>
                   <input
                     type="email"
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      fontSize: '14px',
-                      border: '1px solid #ced4da',
-                      borderRadius: '4px',
-                      outline: 'none',
-                      fontFamily: 'inherit',
-                      boxSizing: 'border-box'
-                    }}
+                    style={getFieldStyle('username')}
                     placeholder="admin@donationreceipt.in"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      clearFieldError('username');
+                    }}
                     autoFocus
                   />
+                  {renderFieldError('username')}
                 </div>
 
                 {/* Password with Eye Toggle */}
@@ -322,20 +385,13 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
                       type={showPassword ? 'text' : 'password'}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '10px 42px 10px 14px',
-                        fontSize: '14px',
-                        border: '1px solid #ced4da',
-                        borderRadius: '4px',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box'
-                      }}
+                      style={getFieldStyle('password', { paddingRight: '42px' })}
                       placeholder="Enter super admin password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        clearFieldError('password');
+                      }}
                     />
                     <button
                       type="button"
@@ -355,6 +411,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
+                  {renderFieldError('password')}
                 </div>
 
                 {/* Forgot password button */}

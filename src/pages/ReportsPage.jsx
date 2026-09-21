@@ -48,7 +48,7 @@ export default function ReportsPage({ user: propUser }) {
 
   const handleExportCSV = () => {
     if (!reportData || !reportData.data) return;
-    const headers = ['Sl No', 'ID Type', 'ID Number', 'Donor Name', 'Address', 'Donation Type', 'Mode', 'Amount', 'Receipt No', 'Date'];
+    const headers = ['S.No', 'ID Type', 'ID Number', 'Donor Name', 'Address', 'Donation Type', 'Mode', 'Amount', 'Receipt No', 'Date'];
     const rows = reportData.data.map(r => [
       r.slNo,
       r.idType,
@@ -170,7 +170,7 @@ export default function ReportsPage({ user: propUser }) {
               <table className="custom-table">
                 <thead>
                   <tr>
-                    <th>Sl. No.</th>
+                    <th>S.No</th>
                     <th>ID Type</th>
                     <th>ID Number (PAN)</th>
                     <th>Donor Name</th>
@@ -212,7 +212,7 @@ export default function ReportsPage({ user: propUser }) {
               <table className="custom-table">
                 <thead>
                   <tr>
-                    <th>#</th>
+                    <th>S.No</th>
                     <th>Donation Head Name</th>
                     <th>Total Receipts Count</th>
                     <th>Total Amount Received (₹)</th>
@@ -248,7 +248,7 @@ export default function ReportsPage({ user: propUser }) {
               <table className="custom-table">
                 <thead>
                   <tr>
-                    <th>#</th>
+                    <th>S.No</th>
                     <th>Payment Channel</th>
                     <th>Transactions Count</th>
                     <th>Total Received (₹)</th>

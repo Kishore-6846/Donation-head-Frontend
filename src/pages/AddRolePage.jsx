@@ -90,6 +90,10 @@ export default function AddRolePage() {
       setInlineError('Please enter a role name.');
       return;
     }
+    if (!/^[a-zA-Z\s]+$/.test(roleName.trim())) {
+      setInlineError('Role Name can only contain letters and spaces (no numbers or special characters).');
+      return;
+    }
     setInlineError('');
 
     setIsSubmitting(true);
@@ -282,7 +286,26 @@ export default function AddRolePage() {
               id="roleNameInput"
               type="text"
               value={roleName}
-              onChange={(e) => setRoleName(e.target.value)}
+              onKeyDown={(e) => {
+                if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'].includes(e.key) || e.ctrlKey || e.metaKey) {
+                  return;
+                }
+                if (!/^[a-zA-Z\s]$/.test(e.key)) {
+                  e.preventDefault();
+                }
+              }}
+              onPaste={(e) => {
+                e.preventDefault();
+                const raw = e.clipboardData.getData('text');
+                const cleaned = raw.replace(/[^a-zA-Z\s]/g, '');
+                setRoleName(cleaned);
+                if (inlineError) setInlineError('');
+              }}
+              onChange={(e) => {
+                const cleaned = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                setRoleName(cleaned);
+                if (inlineError) setInlineError('');
+              }}
               placeholder="Enter Role Name"
               required
               disabled={isView}
@@ -290,7 +313,7 @@ export default function AddRolePage() {
                 width: '100%',
                 padding: '9px 12px',
                 fontSize: '14px',
-                border: '1px solid #ced4da',
+                border: inlineError ? '1px solid #ef4444' : '1px solid #ced4da',
                 borderRadius: '4px',
                 outline: 'none',
                 boxSizing: 'border-box',
@@ -299,14 +322,19 @@ export default function AddRolePage() {
                 transition: 'border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#80bdff';
-                e.target.style.boxShadow = '0 0 0 0.2rem rgba(0, 123, 255, 0.25)';
+                e.target.style.borderColor = inlineError ? '#ef4444' : '#80bdff';
+                e.target.style.boxShadow = inlineError ? '0 0 0 0.2rem rgba(239, 68, 68, 0.25)' : '0 0 0 0.2rem rgba(0, 123, 255, 0.25)';
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = '#ced4da';
+                e.target.style.borderColor = inlineError ? '#ef4444' : '#ced4da';
                 e.target.style.boxShadow = 'none';
               }}
             />
+            {inlineError && (
+              <span style={{ color: '#ef4444', fontSize: '12.5px', marginTop: '5px', display: 'block', fontWeight: 500 }}>
+                {inlineError}
+              </span>
+            )}
           </div>
 
           {/* Subtitle / Instruction */}

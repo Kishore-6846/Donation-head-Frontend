@@ -187,13 +187,18 @@ export default function NewDonationReceiptPage({ user }) {
         if (p.receiptStartNumber) pStart = p.receiptStartNumber;
       }
     } catch(e) {}
+    const token = localStorage.getItem('token') || trustSession?.token || '';
+    const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+    if (uEmail) authHeaders['x-trust-email'] = uEmail;
+    if (tName) authHeaders['x-trust-name'] = tName;
+
     const nextParams = [];
     if (pPrefix) nextParams.push(`prefix=${encodeURIComponent(pPrefix)}`);
     if (pStart) nextParams.push(`startNumber=${encodeURIComponent(pStart)}`);
     if (tName) nextParams.push(`trustName=${encodeURIComponent(tName)}`);
     if (uEmail) nextParams.push(`trustEmail=${encodeURIComponent(uEmail)}`);
     const query = nextParams.length > 0 ? `?${nextParams.join('&')}` : '';
-    fetch(`/api/receipts/next-number${query}`)
+    fetch(`/api/receipts/next-number${query}`, { headers: authHeaders })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.receiptNo) {
@@ -234,11 +239,6 @@ export default function NewDonationReceiptPage({ user }) {
       : (uEmail
           ? `?trustEmail=${encodeURIComponent(uEmail)}&trustName=${encodeURIComponent(tName)}`
           : (tName ? `?trustName=${encodeURIComponent(tName)}` : ''));
-
-    const token = localStorage.getItem('token') || trustSession?.token || '';
-    const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-    if (uEmail) authHeaders['x-trust-email'] = uEmail;
-    if (tName) authHeaders['x-trust-name'] = tName;
 
     fetch(`/api/receipts/donors${donorsQuery}`, {
       headers: authHeaders
@@ -551,6 +551,8 @@ export default function NewDonationReceiptPage({ user }) {
         trust12A: finalActiveUser.reg12ANo || '',
         trustLogo: finalActiveUser.logo || '',
         trustSignature: finalActiveUser.signature || '',
+        trustWatermarkText: finalActiveUser.receiptWatermarkText || '',
+        receiptWatermarkText: finalActiveUser.receiptWatermarkText || '',
         signatoryName: finalActiveUser.signatoryName || finalActiveUser.contactPerson || `${finalActiveUser.firstName || ''} ${finalActiveUser.surname || ''}`.trim() || 'Authorized Signatory',
         signatoryPan: finalActiveUser.signatoryPan || finalActiveUser.panNo || ''
       };

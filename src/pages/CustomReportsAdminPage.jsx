@@ -293,7 +293,7 @@ export default function CustomReportsAdminPage({ user: propUser }) {
               <table className="trust-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '50px' }}>#</th>
+                    <th style={{ width: '50px' }}>S.No</th>
                     <th>Report Title</th>
                     <th>Report Schema</th>
                     <th>Financial Year</th>

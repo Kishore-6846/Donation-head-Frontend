@@ -146,6 +146,7 @@ export default function DonorReportPage({ user: propUser }) {
     }
 
     const headers = [
+      'S.No',
       'User / Trust',
       'Name',
       'Phone',
@@ -155,7 +156,8 @@ export default function DonorReportPage({ user: propUser }) {
       'Aadhaar Number'
     ];
 
-    const rows = dataToExport.map((r) => [
+    const rows = dataToExport.map((r, idx) => [
+      idx + 1,
       `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
       `"${r.name || ''}"`,
       `"${r.phone || ''}"`,
@@ -476,6 +478,9 @@ export default function DonorReportPage({ user: propUser }) {
           <table style={{ width: '100%', minWidth: '1200px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
+                <th style={{ ...thStyle, width: '60px' }}>
+                  S.No
+                </th>
                 <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
                   User / Trust {renderSortIndicator('trustName')}
                 </th>
@@ -503,7 +508,7 @@ export default function DonorReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -519,7 +524,7 @@ export default function DonorReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -535,7 +540,7 @@ export default function DonorReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -551,6 +556,7 @@ export default function DonorReportPage({ user: propUser }) {
               ) : (
                 paginatedData.map((row, idx) => (
                   <tr key={idx}>
+                    <td style={{ ...tdStyle, fontWeight: '600', color: '#475569' }}>{startIndex + idx + 1}</td>
                     <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>
                     <td style={tdStyle}>{row.phone || ''}</td>

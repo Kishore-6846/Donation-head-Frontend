@@ -219,14 +219,17 @@ export default function DynamicReportViewerPage() {
     const cols = report.columns || [];
     const rows = filteredAndSortedRows;
 
-    const headers = cols.map(c => `"${c.label}"`);
+    const headers = ['"S.No"', ...cols.map(c => `"${c.label}"`)];
     const csvLines = [headers.join(',')];
 
-    rows.forEach(r => {
-      const line = cols.map(c => {
-        const val = r[c.key] !== undefined ? r[c.key] : '';
-        return `"${String(val).replace(/"/g, '""')}"`;
-      });
+    rows.forEach((r, idx) => {
+      const line = [
+        idx + 1,
+        ...cols.map(c => {
+          const val = r[c.key] !== undefined ? r[c.key] : '';
+          return `"${String(val).replace(/"/g, '""')}"`;
+        })
+      ];
       csvLines.push(line.join(','));
     });
 
@@ -734,7 +737,7 @@ export default function DynamicReportViewerPage() {
           <table className="trust-table">
             <thead>
               <tr>
-                <th style={{ width: '45px' }}>#</th>
+                <th style={{ width: '45px' }}>S.No</th>
                 {(report.columns || []).map(col => (
                   <th
                     key={col.key}

@@ -31,7 +31,7 @@ export default function AllReceiptsAdminPage() {
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
 
       const [receiptsRes, usersRes] = await Promise.allSettled([
-        fetch('/api/receipts?isSuperAdmin=true&limit=1000', { headers: authHeaders }),
+        fetch('/api/receipts?isSuperAdmin=true&status=Active&limit=1000', { headers: authHeaders }),
         fetch('/api/users', { headers: authHeaders })
       ]);
 
@@ -39,7 +39,7 @@ export default function AllReceiptsAdminPage() {
       if (receiptsRes.status === 'fulfilled') {
         const data = await receiptsRes.value.json();
         if (data.success && Array.isArray(data.data)) {
-          fetchedReceipts = data.data;
+          fetchedReceipts = data.data.filter(r => (r.status || 'Active') !== 'Inactive');
           setReceipts(fetchedReceipts);
         }
       }
@@ -81,6 +81,7 @@ export default function AllReceiptsAdminPage() {
   }, []);
 
   const filtered = receipts.filter(r => {
+    if ((r.status || 'Active') === 'Inactive') return false;
     const q = search.trim().toLowerCase();
     const searchMatch = !q ||
       (r.receiptNo && r.receiptNo.toLowerCase().includes(q)) ||

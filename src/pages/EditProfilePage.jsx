@@ -103,7 +103,9 @@ export default function EditProfilePage({ user, onUpdateUser }) {
 
       receiptPrefix: savedUser?.receiptPrefix || `${rawPrefix}/2026-27/`,
       receiptStartNumber: savedUser?.receiptStartNumber || '1',
-      receiptWatermarkText: savedUser?.receiptWatermarkText || rawPrefix,
+      receiptWatermarkText: (savedUser?.receiptWatermarkText !== undefined && savedUser?.receiptWatermarkText !== null)
+        ? savedUser.receiptWatermarkText
+        : rawPrefix,
       logo: savedUser?.logo || '',
       signature: savedUser?.signature || ''
     };
@@ -411,6 +413,10 @@ export default function EditProfilePage({ user, onUpdateUser }) {
         setSuperAdminSession(updatedUser);
       } else {
         setTrustSession(updatedUser);
+      }
+      const userEmail = (formData.email || existingUser.email || '').toLowerCase().trim();
+      if (userEmail) {
+        localStorage.setItem(`profile_data_${userEmail}`, JSON.stringify(updatedUser));
       }
     } catch (sessionErr) {
       console.warn('Session save warning:', sessionErr);

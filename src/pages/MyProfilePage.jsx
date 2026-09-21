@@ -70,7 +70,9 @@ export default function MyProfilePage({ user }) {
       fcraNo: u.fcraNo || '',
       receiptPrefix: u.receiptPrefix || `${rawPrefix}/2026-27/`,
       receiptStartNumber: u.receiptStartNumber || '1',
-      receiptWatermarkText: u.receiptWatermarkText || rawPrefix
+      receiptWatermarkText: (u.receiptWatermarkText !== undefined && u.receiptWatermarkText !== null)
+        ? u.receiptWatermarkText
+        : rawPrefix
     };
   };
 

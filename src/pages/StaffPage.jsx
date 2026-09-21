@@ -20,7 +20,7 @@ export default function StaffPage({ user: propUser }) {
   const trustId = activeUser?._id || activeUser?.id || '';
 
   const [staff, setStaff] = useState([]);
-  const [rolesList, setRolesList] = useState(['Staff Member', 'Manager', 'Accountant', 'Volunteer', 'Trustee', 'Receipt Operator']);
+  const [rolesList, setRolesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -29,11 +29,12 @@ export default function StaffPage({ user: propUser }) {
   // Modal State for Add / Edit Staff
   const [modalOpen, setModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [staffFormData, setStaffFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    role: 'Staff Member',
+    role: '',
     status: 'Active'
   });
 
@@ -79,11 +80,21 @@ export default function StaffPage({ user: propUser }) {
 
       if (rolesRes.status === 'fulfilled' && rolesRes.value) {
         const rData = await rolesRes.value.json();
+        let apiRoles = [];
         if (rData.success && Array.isArray(rData.data)) {
-          const customRoles = rData.data.map(r => r.roleName).filter(Boolean);
-          const defaultRoles = ['Staff Member', 'Manager', 'Accountant', 'Volunteer', 'Trustee', 'Receipt Operator'];
-          setRolesList(Array.from(new Set([...defaultRoles, ...customRoles])));
+          apiRoles = rData.data.map(r => r.roleName).filter(Boolean);
         }
+        try {
+          const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+          localRoles.forEach(r => {
+            if (r?.roleName && !apiRoles.includes(r.roleName)) {
+              apiRoles.push(r.roleName);
+            }
+          });
+        } catch (e) {}
+
+        const uniqueRoles = Array.from(new Set(apiRoles));
+        setRolesList(uniqueRoles);
       }
 
       let currentPlan = activeUser?.plan || 'Standard';
@@ -148,12 +159,14 @@ export default function StaffPage({ user: propUser }) {
       return;
     }
 
+    const initialRole = rolesList.length > 0 ? rolesList[0] : '';
     setEditingStaff(null);
+    setFieldErrors({});
     setStaffFormData({
       name: '',
       email: '',
       phone: '',
-      role: rolesList[0] || 'Staff Member',
+      role: initialRole,
       status: 'Active'
     });
     setModalOpen(true);
@@ -161,51 +174,102 @@ export default function StaffPage({ user: propUser }) {
 
   const handleOpenEditModal = (s) => {
     setEditingStaff(s);
+    setFieldErrors({});
     setStaffFormData({
       name: s.name || '',
       email: s.email || '',
       phone: s.phone || '',
-      role: s.role || 'Staff Member',
+      role: s.role || (rolesList.length > 0 ? rolesList[0] : ''),
       status: s.status || 'Active'
     });
     setModalOpen(true);
   };
 
+  const handleFieldChange = (field, value) => {
+    setStaffFormData(prev => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const getFieldInputStyle = (fieldName, extraStyle = {}) => {
+    const hasError = Boolean(fieldErrors[fieldName]);
+    return {
+      width: '100%',
+      border: hasError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+      backgroundColor: hasError ? '#fef2f2' : '#ffffff',
+      boxShadow: hasError ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+      outline: 'none',
+      transition: 'border-color 0.2s, background-color 0.2s, box-shadow 0.2s',
+      ...extraStyle
+    };
+  };
+
   const handleSaveStaff = async (e) => {
     e.preventDefault();
-    if (!staffFormData.name.trim() || !staffFormData.email.trim()) {
-      setPopup({
-        isOpen: true,
-        type: 'error',
-        title: 'Required Details',
-        message: 'Name and email are mandatory.',
-        confirmText: 'OK',
-        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
-      });
-      return;
+    const errors = {};
+
+    const cleanName = (staffFormData.name || '').trim();
+    const emailToValidate = (staffFormData.email || '').trim().toLowerCase();
+    const phoneToValidate = (staffFormData.phone || '').replace(/\D/g, '').slice(-10);
+
+    if (!cleanName) {
+      errors.name = 'Full Name is required.';
+    } else if (!/^[a-zA-Z\s.]+$/.test(cleanName)) {
+      errors.name = 'Name should only contain letters and spaces (no numbers or special characters).';
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(staffFormData.email.trim())) {
-      setPopup({
-        isOpen: true,
-        type: 'error',
-        title: 'Invalid Email Address',
-        message: 'Please enter a valid email address (e.g. staff@example.com).',
-        confirmText: 'OK',
-        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+    if (!emailToValidate) {
+      errors.email = 'Email Address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailToValidate)) {
+      errors.email = 'Please enter a valid email address (e.g. staff@example.com).';
+    } else {
+      // Check if duplicate of another staff member's email
+      const isDuplicateEmail = staff.some(s => {
+        if (editingStaff && (s._id === editingStaff._id || s.id === editingStaff.id)) return false;
+        return (s.email || '').trim().toLowerCase() === emailToValidate;
       });
-      return;
+      if (isDuplicateEmail) {
+        errors.email = 'A staff member with this email address already exists.';
+      } else if (trustEmail && trustEmail.toLowerCase() === emailToValidate) {
+        errors.email = 'This email is already in use by the Trust Admin account.';
+      }
     }
 
-    if (staffFormData.phone && staffFormData.phone.length !== 10) {
-      setPopup({
-        isOpen: true,
-        type: 'error',
-        title: 'Invalid Mobile Number',
-        message: 'Mobile number must be exactly 10 digits.',
-        confirmText: 'OK',
-        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+    if (!phoneToValidate) {
+      errors.phone = 'Mobile number is required.';
+    } else if (phoneToValidate.length !== 10) {
+      errors.phone = 'Mobile number must be exactly 10 digits.';
+    } else if (!/^[6-9]\d{9}$/.test(phoneToValidate)) {
+      errors.phone = 'Mobile number must start with 6, 7, 8, or 9.';
+    } else {
+      // Check if duplicate of another staff member's mobile
+      const isDuplicatePhone = staff.some(s => {
+        if (editingStaff && (s._id === editingStaff._id || s.id === editingStaff.id)) return false;
+        const sPhone = (s.phone || '').replace(/\D/g, '').slice(-10);
+        return sPhone === phoneToValidate;
       });
+      if (isDuplicatePhone) {
+        errors.phone = 'A staff member with this mobile number already exists.';
+      } else if (activeUser?.mobile && activeUser.mobile.replace(/\D/g, '').slice(-10) === phoneToValidate) {
+        errors.phone = 'This mobile number is already in use by the Trust Admin account.';
+      }
+    }
+
+    let selectedRole = (staffFormData.role || '').trim();
+    if (!selectedRole && rolesList.length > 0) {
+      selectedRole = rolesList[0];
+    }
+    if (!selectedRole && rolesList.length === 0) {
+      errors.role = 'Please add at least one role in Member Roles first.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
@@ -234,6 +298,7 @@ export default function StaffPage({ user: propUser }) {
 
       const payload = {
         ...staffFormData,
+        role: selectedRole || staffFormData.role || 'Staff Member',
         trustEmail: trustEmail || editingStaff?.trustEmail || '',
         trustName: trustName || editingStaff?.trustName || '',
         trustId: trustId || editingStaff?.trustId || ''
@@ -246,7 +311,7 @@ export default function StaffPage({ user: propUser }) {
       });
       const data = await res.json();
 
-      if (data.success) {
+      if (res.ok && data.success) {
         setModalOpen(false);
         fetchStaff();
         setPopup({
@@ -258,11 +323,25 @@ export default function StaffPage({ user: propUser }) {
           onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
         });
       } else {
+        const errMsg = data.message || (editingStaff ? 'Could not update staff member.' : 'Could not add staff member.');
+        const errLower = errMsg.toLowerCase();
+
+        const backendFieldErrors = {};
+        if (errLower.includes('email')) {
+          backendFieldErrors.email = errMsg;
+        }
+        if (errLower.includes('mobile') || errLower.includes('phone')) {
+          backendFieldErrors.phone = errMsg;
+        }
+        if (Object.keys(backendFieldErrors).length > 0) {
+          setFieldErrors(prev => ({ ...prev, ...backendFieldErrors }));
+        }
+
         setPopup({
           isOpen: true,
           type: 'error',
-          title: 'Operation Failed',
-          message: data.message || 'Could not save staff member.',
+          title: editingStaff ? 'Update Failed' : 'Add Staff Failed',
+          message: errMsg,
           confirmText: 'OK',
           onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
         });
@@ -484,12 +563,11 @@ export default function StaffPage({ user: propUser }) {
           <table className="custom-table table-mint" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={{ ...thStyle, width: '50px' }}>#</th>
+                <th style={{ ...thStyle, width: '55px' }}>S.No</th>
                 <th style={thStyle}>Name</th>
                 <th style={thStyle}>Email</th>
                 <th style={thStyle}>Mobile</th>
                 <th style={thStyle}>Role</th>
-                <th style={thStyle}>Status</th>
                 <th style={thStyle}>Created At</th>
                 <th style={{ ...thStyle, width: '110px', textAlign: 'center' }}>Actions</th>
               </tr>
@@ -497,13 +575,13 @@ export default function StaffPage({ user: propUser }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
                     Loading staff members...
                   </td>
                 </tr>
               ) : currentEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '30px 22px', color: '#555', fontSize: '13.5px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '30px 22px', color: '#555', fontSize: '13.5px' }}>
                     No staff members found. Click <strong>"Add Staff Member"</strong> to add your first team member.
                   </td>
                 </tr>
@@ -522,11 +600,6 @@ export default function StaffPage({ user: propUser }) {
                     <td style={{ ...tdStyle, color: '#555' }}>{s.phone || '—'}</td>
                     <td style={tdStyle}>
                       <span className="badge-pill badge-info">{s.role || 'Staff Member'}</span>
-                    </td>
-                    <td style={tdStyle}>
-                      <span className={`badge-pill ${s.status === 'Active' ? 'badge-success' : 'badge-danger'}`}>
-                        {s.status || 'Active'}
-                      </span>
                     </td>
                     <td style={{ ...tdStyle, color: '#555' }}>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB') : 'Today'}</td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
@@ -647,7 +720,7 @@ export default function StaffPage({ user: propUser }) {
               </button>
             </div>
 
-            <form onSubmit={handleSaveStaff}>
+            <form onSubmit={handleSaveStaff} noValidate>
               <div className="receipt-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
@@ -655,13 +728,34 @@ export default function StaffPage({ user: propUser }) {
                   </label>
                   <input
                     type="text"
-                    required
                     placeholder="e.g. Ramesh Kumar"
                     className="trust-input"
-                    style={{ width: '100%' }}
+                    style={getFieldInputStyle('name')}
                     value={staffFormData.name}
-                    onChange={(e) => setStaffFormData({ ...staffFormData, name: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || e.ctrlKey || e.metaKey) {
+                        return;
+                      }
+                      if (!/^[a-zA-Z\s.]$/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const raw = e.clipboardData.getData('text');
+                      const cleaned = raw.replace(/[^a-zA-Z\s.]/g, '');
+                      handleFieldChange('name', cleaned);
+                    }}
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/[^a-zA-Z\s.]/g, '');
+                      handleFieldChange('name', cleaned);
+                    }}
                   />
+                  {fieldErrors.name && (
+                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 500 }}>
+                      {fieldErrors.name}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -669,63 +763,112 @@ export default function StaffPage({ user: propUser }) {
                     Email Address <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <input
-                    type="email"
-                    required
+                    type="text"
                     placeholder="e.g. ramesh@trust.org"
                     className="trust-input"
-                    style={{ width: '100%' }}
+                    style={getFieldInputStyle('email')}
                     value={staffFormData.email}
-                    onChange={(e) => setStaffFormData({ ...staffFormData, email: e.target.value })}
+                    onChange={(e) => handleFieldChange('email', e.target.value)}
                   />
+                  {fieldErrors.email && (
+                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 500 }}>
+                      {fieldErrors.email}
+                    </span>
+                  )}
                 </div>
 
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                    Mobile Number
+                    Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <input
                     type="tel"
                     maxLength={10}
                     inputMode="numeric"
-                    placeholder="10-digit mobile number"
+                    placeholder="10-digit mobile number (starts with 6-9)"
                     className="trust-input"
-                    style={{ width: '100%' }}
+                    style={getFieldInputStyle('phone')}
                     value={staffFormData.phone}
-                    onChange={(e) => setStaffFormData({ ...staffFormData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    onKeyDown={(e) => {
+                      if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || e.ctrlKey || e.metaKey) {
+                        return;
+                      }
+                      if (!/^\d$/.test(e.key)) {
+                        e.preventDefault();
+                      } else if (!staffFormData.phone && !/^[6-9]$/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const raw = e.clipboardData.getData('text').replace(/\D/g, '');
+                      const cleaned = raw.replace(/^[^6-9]+/, '').slice(0, 10);
+                      handleFieldChange('phone', cleaned);
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, '');
+                      const cleaned = raw.replace(/^[^6-9]+/, '').slice(0, 10);
+                      handleFieldChange('phone', cleaned);
+                    }}
                   />
+                  {fieldErrors.phone && (
+                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 500 }}>
+                      {fieldErrors.phone}
+                    </span>
+                  )}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                      Member Role
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155', margin: 0 }}>
+                      Member Role <span style={{ color: '#ef4444' }}>*</span>
                     </label>
-                    <select
-                      className="trust-select"
-                      style={{ width: '100%', height: '40px' }}
-                      value={staffFormData.role}
-                      onChange={(e) => setStaffFormData({ ...staffFormData, role: e.target.value })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalOpen(false);
+                        navigate('/trust/add-role');
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#00a651',
+                        fontSize: '11.5px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: 0,
+                        textDecoration: 'underline'
+                      }}
+                      title="Add a new member role"
                     >
-                      {rolesList.map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
+                      + Add Role
+                    </button>
                   </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                      Status
-                    </label>
-                    <select
-                      className="trust-select"
-                      style={{ width: '100%', height: '40px' }}
-                      value={staffFormData.status}
-                      onChange={(e) => setStaffFormData({ ...staffFormData, status: e.target.value })}
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
-                  </div>
+                  <select
+                    className="trust-select"
+                    style={getFieldInputStyle('role', { width: '100%', height: '40px' })}
+                    value={staffFormData.role}
+                    onChange={(e) => handleFieldChange('role', e.target.value)}
+                  >
+                    {rolesList.length === 0 ? (
+                      <option value="" disabled>No member roles added yet</option>
+                    ) : (
+                      <>
+                        {/* If editing staff has a role not in current rolesList, preserve it */}
+                        {editingStaff?.role && !rolesList.includes(editingStaff.role) && (
+                          <option value={editingStaff.role}>{editingStaff.role}</option>
+                        )}
+                        {rolesList.map(r => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  {fieldErrors.role && (
+                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 500 }}>
+                      {fieldErrors.role}
+                    </span>
+                  )}
                 </div>
               </div>
 

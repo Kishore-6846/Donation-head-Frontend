@@ -168,6 +168,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
     }
 
     const headers = [
+      'S.No',
       'User / Trust',
       'Receipt No.',
       'Name',
@@ -181,7 +182,8 @@ export default function PaymentModeReportPage({ user: propUser }) {
       'Reference'
     ];
 
-    const rows = dataToExport.map((r) => [
+    const rows = dataToExport.map((r, idx) => [
+      idx + 1,
       `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
       `"${r.receiptNo || ''}"`,
       `"${r.name || ''}"`,
@@ -527,6 +529,9 @@ export default function PaymentModeReportPage({ user: propUser }) {
           <table style={{ width: '100%', minWidth: '1700px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
+                <th style={{ ...thStyle, width: '60px' }}>
+                  S.No
+                </th>
                 <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
                   User / Trust {renderSortIndicator('trustName')}
                 </th>
@@ -566,7 +571,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -582,7 +587,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -598,7 +603,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -614,6 +619,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               ) : (
                 paginatedData.map((row, idx) => (
                   <tr key={row.receiptNo || idx}>
+                    <td style={{ ...tdStyle, fontWeight: '600', color: '#475569' }}>{startIndex + idx + 1}</td>
                     <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
                     <td style={tdStyle}>{row.receiptNo}</td>
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>

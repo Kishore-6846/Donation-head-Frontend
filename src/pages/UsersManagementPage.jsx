@@ -197,7 +197,7 @@ export default function UsersManagementPage() {
               type: 'success',
               title: 'Account Approved!',
               message: `Trust account "${u.trustName || u.name}" is now Active. The admin can now log into their Admin Portal.`,
-              confirmText: 'Great!',
+              confirmText: 'OK',
               onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
             });
           } else {

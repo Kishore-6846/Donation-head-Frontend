@@ -547,7 +547,7 @@ export default function PublishedReportsPage() {
             <table className="trust-table">
               <thead>
                 <tr>
-                  <th style={{ width: '45px' }}>#</th>
+                  <th style={{ width: '45px' }}>S.No</th>
                   <th>Report Title &amp; Code</th>
                   <th>Category</th>
                   <th>Target Trust</th>

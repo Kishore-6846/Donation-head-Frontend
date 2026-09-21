@@ -159,7 +159,7 @@ export default function Form10BDReportPage({ user: propUser }) {
     }
 
     const headers = [
-      'Sr. No.',
+      'S.No',
       'User / Trust',
       'Pre Acknowledgement Number',
       'ID Code',
@@ -565,7 +565,7 @@ export default function Form10BDReportPage({ user: propUser }) {
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: '60px' }} onClick={() => handleSort('srNo')}>
-                  Sr. No. {renderSortIndicator('srNo')}
+                  S.No {renderSortIndicator('srNo')}
                 </th>
                 <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
                   User / Trust {renderSortIndicator('trustName')}

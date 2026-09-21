@@ -367,7 +367,7 @@ export default function SuperAdminReportsPage() {
               <table className="trust-data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ width: '40px', textAlign: 'center' }}>#</th>
+                    <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
                     <th>Trust / Admin Organization</th>
                     <th>Contact Person</th>
                     <th>Subscribed Plan</th>

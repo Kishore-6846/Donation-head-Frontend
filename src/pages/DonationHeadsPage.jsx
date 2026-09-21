@@ -342,37 +342,18 @@ export default function DonationHeadsPage({ user }) {
           <table className="donation-head-table table-mint">
             <thead>
               <tr>
-                <th style={{ width: '60px' }} onClick={() => handleSort('index')}>
-  #
-  <span className="datatable-sort-arrows">
-    <span>▲</span>
-    <span>▼</span>
-  </span>
-</th>
-
-<th style={{ width: '40%' }} onClick={() => handleSort('name')}>
-  Name
-  <span className="datatable-sort-arrows">
-    <span>▲</span>
-    <span>▼</span>
-  </span>
-</th>
-
-<th style={{ width: '30%' }} onClick={() => handleSort('date')}>
-  Created At
-  <span className="datatable-sort-arrows">
-    <span>▲</span>
-    <span>▼</span>
-  </span>
-</th>
-
-<th style={{ width: '20%' }}>
-  Actions
-  <span className="datatable-sort-arrows">
-    <span>▲</span>
-    <span>▼</span>
-  </span>
-</th>
+                <th style={{ width: '80px', cursor: 'pointer' }} onClick={() => handleSort('index')}>
+                  S.No <span className="sort-icon">▲▼</span>
+                </th>
+                <th style={{ width: '40%', cursor: 'pointer' }} onClick={() => handleSort('name')}>
+                  Name <span className="sort-icon">▲▼</span>
+                </th>
+                <th style={{ width: '30%', cursor: 'pointer' }} onClick={() => handleSort('date')}>
+                  Created At <span className="sort-icon">▲▼</span>
+                </th>
+                <th style={{ width: '20%' }}>
+                  Actions <span className="sort-icon">▲▼</span>
+                </th>
               </tr>
             </thead>
             <tbody>
