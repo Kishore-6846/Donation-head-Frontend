@@ -70,6 +70,41 @@ const deduplicateHeadsList = (list) => {
   return result;
 };
 
+const formatHeadCreatedAt = (formattedDate, createdAt) => {
+  if (formattedDate && typeof formattedDate === 'string' && formattedDate.trim() && formattedDate !== 'Today') {
+    return formattedDate;
+  }
+  if (!createdAt) return formattedDate || '16-04-2023 10:18am';
+  try {
+    const d = new Date(createdAt);
+    if (isNaN(d.getTime())) return formattedDate || '16-04-2023 10:18am';
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    }).formatToParts(d);
+    let day = '', month = '', year = '', hour = '', minute = '', dayPeriod = '';
+    for (const p of parts) {
+      if (p.type === 'day') day = p.value;
+      else if (p.type === 'month') month = p.value;
+      else if (p.type === 'year') year = p.value;
+      else if (p.type === 'hour') hour = p.value;
+      else if (p.type === 'minute') minute = p.value;
+      else if (p.type === 'dayPeriod') dayPeriod = p.value;
+    }
+    const strHour = String(hour).padStart(2, '0');
+    const strMin = String(minute).padStart(2, '0');
+    const ampm = (dayPeriod || (d.getHours() >= 12 ? 'pm' : 'am')).toLowerCase().replace(/\./g, '');
+    return `${day}-${month}-${year} ${strHour}:${strMin}${ampm}`;
+  } catch (e) {
+    return formattedDate || '16-04-2023 10:18am';
+  }
+};
+
 const getInitialHeads = () => {
   try {
     const custom = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
@@ -363,7 +398,7 @@ export default function DonationHeadsPage({ user }) {
                     {startIndex + idx + 1}
                   </td>
                   <td style={{ fontWeight: '500', color: '#1e293b' }}>{head.name || head.rawName || 'Donation Head'}</td>
-                  <td style={{ color: '#475569' }}>{head.formattedDate || '16-04-2023 10:18am'}</td>
+                  <td style={{ color: '#475569' }}>{formatHeadCreatedAt(head.formattedDate, head.createdAt)}</td>
                   <td>
                     <div className="actions-cell">
                       <button
