@@ -65,42 +65,57 @@ export default function StaffPage({ user: propUser }) {
       const targetUserId = trustEmail || trustId;
       const [staffRes, rolesRes, userRes] = await Promise.allSettled([
         fetch(`/api/staff${queryParam}`),
-        fetch('/api/roles'),
+        fetch(`/api/roles${queryParam}`),
         targetUserId ? fetch(`/api/users/${encodeURIComponent(targetUserId)}`) : Promise.resolve(null)
       ]);
 
       let staffData = [];
-      if (staffRes.status === 'fulfilled' && staffRes.value) {
-        const d = await staffRes.value.json();
-        if (d.success && Array.isArray(d.data)) {
-          staffData = d.data;
-          setStaff(staffData);
-        }
-      }
-
-      if (rolesRes.status === 'fulfilled' && rolesRes.value) {
-        const rData = await rolesRes.value.json();
-        let apiRoles = [];
-        if (rData.success && Array.isArray(rData.data)) {
-          apiRoles = rData.data.map(r => r.roleName).filter(Boolean);
-        }
+      if (staffRes.status === 'fulfilled' && staffRes.value && staffRes.value.ok) {
         try {
-          const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
-          localRoles.forEach(r => {
-            if (r?.roleName && !apiRoles.includes(r.roleName)) {
-              apiRoles.push(r.roleName);
-            }
-          });
+          const d = await staffRes.value.json();
+          if (d.success && Array.isArray(d.data)) {
+            staffData = d.data;
+            setStaff(staffData);
+          }
         } catch (e) {}
-
-        const uniqueRoles = Array.from(new Set(apiRoles));
-        setRolesList(uniqueRoles);
       }
+
+      let apiRoles = [];
+      if (rolesRes.status === 'fulfilled' && rolesRes.value && rolesRes.value.ok) {
+        try {
+          const rData = await rolesRes.value.json();
+          if (rData.success && Array.isArray(rData.data)) {
+            apiRoles = rData.data.map(r => r.roleName).filter(Boolean);
+          }
+        } catch (e) {}
+      }
+
+      // Always merge with localStorage roles
+      try {
+        const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+        localRoles.forEach(r => {
+          if (r?.roleName && !apiRoles.includes(r.roleName)) {
+            apiRoles.push(r.roleName);
+          }
+        });
+      } catch (e) {}
+
+      // Always merge with any roles currently present on existing staff
+      if (Array.isArray(staffData)) {
+        staffData.forEach(s => {
+          if (s?.role && !apiRoles.includes(s.role)) {
+            apiRoles.push(s.role);
+          }
+        });
+      }
+
+      const uniqueRoles = Array.from(new Set(apiRoles)).filter(Boolean);
+      setRolesList(uniqueRoles);
 
       let currentPlan = activeUser?.plan || 'Standard';
       let extraUsers = Number(activeUser?.extraStaffUsers || activeUser?.purchasedStaffUsers || 0);
 
-      if (userRes.status === 'fulfilled' && userRes.value) {
+      if (userRes.status === 'fulfilled' && userRes.value && userRes.value.ok) {
         try {
           const uData = await userRes.value.json();
           const liveUser = uData?.data || uData?.user || (uData?.email ? uData : null);
@@ -130,6 +145,11 @@ export default function StaffPage({ user: propUser }) {
       });
     } catch (e) {
       console.error('Error fetching staff:', e);
+      try {
+        const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+        const extracted = localRoles.map(r => r?.roleName).filter(Boolean);
+        if (extracted.length > 0) setRolesList(extracted);
+      } catch (err) {}
     } finally {
       setLoading(false);
     }
@@ -159,7 +179,29 @@ export default function StaffPage({ user: propUser }) {
       return;
     }
 
-    const initialRole = rolesList.length > 0 ? rolesList[0] : '';
+    // Refresh role list from state and local storage immediately
+    let currentRoles = [...rolesList];
+    try {
+      const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+      localRoles.forEach(r => {
+        if (r?.roleName && !currentRoles.includes(r.roleName)) {
+          currentRoles.push(r.roleName);
+        }
+      });
+    } catch (e) {}
+    if (Array.isArray(staff)) {
+      staff.forEach(s => {
+        if (s?.role && !currentRoles.includes(s.role)) {
+          currentRoles.push(s.role);
+        }
+      });
+    }
+    const safeRoles = Array.from(new Set(currentRoles)).filter(Boolean);
+    if (safeRoles.length > 0) {
+      setRolesList(safeRoles);
+    }
+
+    const initialRole = safeRoles.length > 0 ? safeRoles[0] : '';
     setEditingStaff(null);
     setFieldErrors({});
     setStaffFormData({

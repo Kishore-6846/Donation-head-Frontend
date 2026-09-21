@@ -41,33 +41,39 @@ export default function RolesPage({ user: propUser }) {
     try {
       const queryParam = trustEmail ? `?trustEmail=${encodeURIComponent(trustEmail)}` : '';
       const [rolesRes, staffRes] = await Promise.allSettled([
-        fetch('/api/roles'),
+        fetch(`/api/roles${queryParam}`),
         fetch(`/api/staff${queryParam}`)
       ]);
 
       let apiRoles = [];
-      if (rolesRes.status === 'fulfilled' && rolesRes.value) {
-        const data = await rolesRes.value.json();
-        if (data.success && Array.isArray(data.data)) {
-          apiRoles = data.data;
-        }
+      if (rolesRes.status === 'fulfilled' && rolesRes.value && rolesRes.value.ok) {
+        try {
+          const data = await rolesRes.value.json();
+          if (data.success && Array.isArray(data.data)) {
+            apiRoles = data.data;
+          }
+        } catch (e) {}
       }
 
       const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
       const roleMap = new Map();
-      apiRoles.forEach(r => roleMap.set(r.roleName, r));
+      apiRoles.forEach(r => {
+        if (r && r.roleName) roleMap.set(r.roleName, r);
+      });
       localRoles.forEach(r => {
-        if (!roleMap.has(r.roleName)) {
+        if (r && r.roleName && !roleMap.has(r.roleName)) {
           roleMap.set(r.roleName, r);
         }
       });
       setRoles(Array.from(roleMap.values()));
 
-      if (staffRes.status === 'fulfilled' && staffRes.value) {
-        const sData = await staffRes.value.json();
-        if (sData.success && Array.isArray(sData.data)) {
-          setStaffList(sData.data);
-        }
+      if (staffRes.status === 'fulfilled' && staffRes.value && staffRes.value.ok) {
+        try {
+          const sData = await staffRes.value.json();
+          if (sData.success && Array.isArray(sData.data)) {
+            setStaffList(sData.data);
+          }
+        } catch (e) {}
       }
     } catch (e) {
       console.error('Error fetching roles and staff:', e);

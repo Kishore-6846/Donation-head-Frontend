@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import { List, AlertTriangle, CheckCircle2, Sparkles, Shield } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 const defaultPermissions = {
   donationHead: {
@@ -32,6 +33,15 @@ export default function AddRolePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [inlineError, setInlineError] = useState('');
+
+  const activeUser = useMemo(() => {
+    const trustSession = getTrustSession();
+    return trustSession?.user || null;
+  }, []);
+
+  const trustEmail = activeUser?.email || '';
+  const trustName = activeUser?.trustName || activeUser?.name || '';
+  const trustId = activeUser?._id || activeUser?.id || '';
 
   useEffect(() => {
     if (editId) {
@@ -127,7 +137,10 @@ export default function AddRolePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             roleName: roleName.trim(),
-            permissions
+            permissions,
+            trustEmail: trustEmail || '',
+            trustName: trustName || '',
+            trustId: trustId || ''
           })
         });
         const data = await res.json();
@@ -153,7 +166,10 @@ export default function AddRolePage() {
       roleName: roleName.trim(),
       description: 'System roles for trust members',
       permissions,
-      created: dateStr
+      created: dateStr,
+      trustEmail: trustEmail || '',
+      trustName: trustName || '',
+      trustId: trustId || ''
     };
 
     // Save to localStorage immediately as reliable cache/fallback
@@ -171,7 +187,10 @@ export default function AddRolePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roleName: roleName.trim(),
-          permissions
+          permissions,
+          trustEmail: trustEmail || '',
+          trustName: trustName || '',
+          trustId: trustId || ''
         })
       });
 
@@ -182,14 +201,11 @@ export default function AddRolePage() {
           navigate('/trust/roles');
         }, 1200);
       } else {
-        setPopup({
-          isOpen: true,
-          type: 'error',
-          title: 'Error Creating Role',
-          message: data.message || 'Error creating role',
-          confirmText: 'OK',
-          onConfirm: () => setPopup(prev => ({ ...prev, isOpen: false }))
-        });
+        setInlineError(data.message || 'Error creating role on server.');
+        setToastMessage('Role saved locally!');
+        setTimeout(() => {
+          navigate('/trust/roles');
+        }, 1200);
       }
     } catch (err) {
       console.error('Error adding role:', err);
