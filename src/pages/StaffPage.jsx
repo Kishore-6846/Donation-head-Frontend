@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
-import { Users, Trash2, Pencil, Sparkles, Plus, Mail, Phone, Shield, CheckCircle2, X } from 'lucide-react';
+import { Users, Trash2, Pencil, Sparkles, Plus, Mail, Phone, Shield, CheckCircle2, X, Filter, RotateCcw } from 'lucide-react';
 import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 export default function StaffPage({ user: propUser }) {
@@ -22,7 +22,9 @@ export default function StaffPage({ user: propUser }) {
   const [staff, setStaff] = useState([]);
   const [rolesList, setRolesList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [appliedFilter, setAppliedFilter] = useState({ search: '', role: '' });
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -422,16 +424,43 @@ export default function StaffPage({ user: propUser }) {
     });
   };
 
+  const handleApplyFilter = () => {
+    setAppliedFilter({
+      search: searchInput.trim(),
+      role: roleFilter
+    });
+    setCurrentPage(1);
+  };
+
+  const handleResetFilter = () => {
+    setSearchInput('');
+    setRoleFilter('');
+    setAppliedFilter({
+      search: '',
+      role: ''
+    });
+    setCurrentPage(1);
+  };
+
   const filteredStaff = useMemo(() => {
-    if (!searchTerm.trim()) return staff;
-    const term = searchTerm.toLowerCase();
-    return staff.filter(s =>
-      (s.name && s.name.toLowerCase().includes(term)) ||
-      (s.email && s.email.toLowerCase().includes(term)) ||
-      (s.phone && s.phone.toLowerCase().includes(term)) ||
-      (s.role && s.role.toLowerCase().includes(term))
-    );
-  }, [staff, searchTerm]);
+    const term = (appliedFilter.search || '').toLowerCase();
+    const selectedRole = (appliedFilter.role || '').toLowerCase();
+
+    return staff.filter(s => {
+      const matchesSearch = !term || (
+        (s.name && s.name.toLowerCase().includes(term)) ||
+        (s.email && s.email.toLowerCase().includes(term)) ||
+        (s.phone && s.phone.toLowerCase().includes(term)) ||
+        (s.role && s.role.toLowerCase().includes(term))
+      );
+
+      const matchesRole = !selectedRole || (
+        s.role && s.role.toLowerCase() === selectedRole
+      );
+
+      return matchesSearch && matchesRole;
+    });
+  }, [staff, appliedFilter]);
 
   const totalEntries = filteredStaff.length;
   const totalPages = Math.ceil(totalEntries / entriesPerPage) || 1;
@@ -570,33 +599,130 @@ export default function StaffPage({ user: propUser }) {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              fontSize: '13.5px',
-              color: '#475569'
+              gap: '10px',
+              flexWrap: 'wrap'
             }}
           >
-            <label htmlFor="staff-search-input" style={{ fontWeight: 500 }}>Search:</label>
-            <input
-              id="staff-search-input"
-              type="text"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search staff members..."
+            {/* Search Input */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label htmlFor="staff-search-input" style={{ fontWeight: 500, fontSize: '13.5px', color: '#475569' }}>Search:</label>
+              <input
+                id="staff-search-input"
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleApplyFilter();
+                  }
+                }}
+                placeholder="Search name, email, mobile..."
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  outline: 'none',
+                  width: '200px',
+                  backgroundColor: '#ffffff',
+                  color: '#1e293b',
+                  transition: 'border-color 0.2s ease'
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#00a651')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
+              />
+            </div>
+
+            {/* Role Filter Dropdown */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label htmlFor="staff-role-filter" style={{ fontWeight: 500, fontSize: '13.5px', color: '#475569' }}>Role:</label>
+              <select
+                id="staff-role-filter"
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  outline: 'none',
+                  backgroundColor: '#ffffff',
+                  color: '#1e293b',
+                  cursor: 'pointer',
+                  minWidth: '130px',
+                  transition: 'border-color 0.2s ease'
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#00a651')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
+              >
+                <option value="">All Roles</option>
+                {rolesList.map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter Button */}
+            <button
+              type="button"
+              onClick={handleApplyFilter}
               style={{
-                padding: '6px 12px',
+                backgroundColor: '#00a651',
+                color: '#ffffff',
+                border: 'none',
+                padding: '6px 16px',
                 borderRadius: '6px',
-                border: '1px solid #cbd5e1',
                 fontSize: '13px',
-                outline: 'none',
-                width: '220px',
-                transition: 'border-color 0.2s ease'
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                boxShadow: '0 2px 5px rgba(0, 166, 81, 0.25)',
+                transition: 'background-color 0.15s ease'
               }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = '#00a651')}
-              onBlur={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
-            />
+              onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#008c44')}
+              onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#00a651')}
+              title="Apply search and role filter"
+            >
+              <Filter size={14} />
+              <span>Filter</span>
+            </button>
+
+            {/* Reset Filter Button */}
+            {(appliedFilter.search || appliedFilter.role || searchInput || roleFilter) && (
+              <button
+                type="button"
+                onClick={handleResetFilter}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e2e8f0';
+                  e.currentTarget.style.color = '#1e293b';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f1f5f9';
+                  e.currentTarget.style.color = '#475569';
+                }}
+                title="Reset filters to show all staff members"
+              >
+                <RotateCcw size={13} />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -624,7 +750,33 @@ export default function StaffPage({ user: propUser }) {
               ) : currentEntries.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '30px 22px', color: '#555', fontSize: '13.5px' }}>
-                    No staff members found. Click <strong>"Add Staff Member"</strong> to add your first team member.
+                    {appliedFilter.search || appliedFilter.role ? (
+                      <div>
+                        <p style={{ margin: '0 0 8px 0', color: '#475569' }}>
+                          No staff members found matching the filter criteria.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleResetFilter}
+                          style={{
+                            backgroundColor: '#00a651',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '5px 14px',
+                            borderRadius: '4px',
+                            fontSize: '12.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Clear Filter
+                        </button>
+                      </div>
+                    ) : (
+                      <span>
+                        No staff members found. Click <strong>"Add Member"</strong> to add your first team member.
+                      </span>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -872,18 +1024,25 @@ export default function StaffPage({ user: propUser }) {
                         navigate('/trust/add-role');
                       }}
                       style={{
-                        background: 'none',
+                        backgroundColor: '#00a651',
                         border: 'none',
-                        color: '#00a651',
+                        color: '#ffffff',
                         fontSize: '11.5px',
                         fontWeight: 600,
                         cursor: 'pointer',
-                        padding: 0,
-                        textDecoration: 'underline'
+                        padding: '3px 9px',
+                        borderRadius: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 1px 3px rgba(0, 166, 81, 0.25)',
+                        transition: 'background-color 0.15s ease'
                       }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#008c44')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#00a651')}
                       title="Add a new member role"
                     >
-                      + Add Role
+                      Add Role
                     </button>
                   </div>
                   <select
