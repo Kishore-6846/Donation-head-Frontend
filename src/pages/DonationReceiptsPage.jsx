@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
+import ShareReceiptModal from '../components/ShareReceiptModal';
 import {
   Plus,
   Download,
@@ -25,6 +26,12 @@ export default function DonationReceiptsPage({ user }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [shareModal, setShareModal] = useState({
+    isOpen: false,
+    receipt: null,
+    mode: 'whatsapp'
+  });
 
   const [popup, setPopup] = useState({
     isOpen: false,
@@ -138,33 +145,182 @@ export default function DonationReceiptsPage({ user }) {
     });
   };
 
-  const handleSendWhatsApp = (receipt) => {
+  // Helper to fetch and download receipt PDF file to admin's device
+  const downloadReceiptPdfFile = async (receipt) => {
+    try {
+      const basePdfUrl = receipt.receiptNo
+        ? `/api/receipts/pdf?receiptNo=${encodeURIComponent(receipt.receiptNo)}`
+        : `/api/receipts/pdf?id=${encodeURIComponent(receipt._id)}`;
+      const urlWithTrust = `${basePdfUrl}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`;
+
+      const res = await fetch(urlWithTrust);
+      if (!res.ok) throw new Error('Failed to fetch PDF');
+      const blob = await res.blob();
+      const safeNo = (receipt.receiptNo || 'Receipt').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `Donation_Receipt_${safeNo}.pdf`;
+
+      // Auto-trigger browser download so the PDF attachment is immediately available
+      const fileUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(fileUrl), 5000);
+
+      const pdfFile = new File([blob], filename, { type: 'application/pdf' });
+      return { blob, file: pdfFile, filename };
+    } catch (e) {
+      console.warn('Could not auto-download PDF:', e);
+      return null;
+    }
+  };
+
+  const handleSendWhatsApp = async (receipt) => {
     const rawPhone = (receipt.phone || receipt.mobile || '').toString().trim();
-    if (!rawPhone) return;
+    if (!rawPhone) {
+      setPopup({
+        isOpen: true,
+        type: 'danger',
+        title: 'Phone Number Missing',
+        message: 'No mobile or phone number is available for this donor receipt.'
+      });
+      return;
+    }
     const digitsOnly = rawPhone.replace(/\D/g, '');
     const phone = digitsOnly.startsWith('91') && digitsOnly.length > 10 ? digitsOnly : `91${digitsOnly}`;
-    const currentTrustName = user?.trustName || 'our Trust';
+    const currentTrustName = effectiveTrustName || user?.trustName || 'our Trust';
+    const safeNo = (receipt.receiptNo || 'Receipt').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    // 1. Download PDF to device so it's ready to attach in WhatsApp
+    const fileResult = await downloadReceiptPdfFile(receipt);
+
     const printUrl = receipt.receiptNo
-      ? `${window.location.origin}/api/receipts/pdf?receiptNo=${encodeURIComponent(receipt.receiptNo)}`
+      ? `${window.location.origin}/api/receipts/pdf?receiptNo=${encodeURIComponent(receipt.receiptNo)}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`
       : `${window.location.origin}/api/receipts/pdf?id=${encodeURIComponent(receipt._id)}`;
-    const text = encodeURIComponent(
-      `Hello ${receipt.donorName},\n\nThank you for your generous donation of ₹${Number(receipt.amount).toFixed(2)} to ${currentTrustName} under head "${receipt.donationHead}".\n\nYour 80G Receipt Number: ${receipt.receiptNo}\nReceipt Date: ${receipt.receiptDate}\n\nYou can view and download your 80G Receipt PDF here:\n${printUrl}\n\nThank you for supporting our mission!`
-    );
+
+    const messageText =
+      `🙏 *Official 80G Donation Receipt - ${currentTrustName}*\n\n` +
+      `Dear *${receipt.donorName}*,\n\n` +
+      `Thank you for your generous donation of *₹${Number(receipt.amount).toFixed(2)}* to *${currentTrustName}* under head "*${receipt.donationHead}*".\n\n` +
+      `📋 *Receipt Details:*\n` +
+      `• *Receipt No:* ${receipt.receiptNo}\n` +
+      `• *Receipt Date:* ${receipt.receiptDate}\n` +
+      `• *Donation Head:* ${receipt.donationHead}\n` +
+      `• *Amount:* ₹${Number(receipt.amount).toFixed(2)}\n\n` +
+      `📄 *Direct 80G Receipt PDF:* \n${printUrl}\n\n` +
+      `📎 *Attached File:* Official 80G Tax-Exempt Receipt PDF (Donation_Receipt_${safeNo}.pdf).\n\n` +
+      `Thank you for supporting our mission! ✨\n` +
+      `— *${currentTrustName}*`;
+
+    // 2. Try Native Web Share API with file attachment if supported
+    if (fileResult?.file && navigator.canShare && navigator.canShare({ files: [fileResult.file] })) {
+      try {
+        await navigator.share({
+          files: [fileResult.file],
+          title: `Donation Receipt - ${receipt.receiptNo}`,
+          text: messageText
+        });
+        return;
+      } catch (shareErr) {
+        if (shareErr.name !== 'AbortError') {
+          console.warn('Native share failed, opening WhatsApp Web:', shareErr);
+        }
+      }
+    }
+
+    // 3. Open WhatsApp Web/App with pre-filled message & direct PDF link
+    const text = encodeURIComponent(messageText);
     window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${text}`, '_blank');
   };
 
-  const handleSendEmail = (receipt) => {
+  const handleSendEmail = async (receipt) => {
     const email = (receipt.email || '').trim();
-    if (!email) return;
-    const currentTrustName = user?.trustName || 'our Trust';
-    const subject = encodeURIComponent(`Donation Receipt - ${receipt.receiptNo} | ${currentTrustName}`);
+    if (!email) {
+      setPopup({
+        isOpen: true,
+        type: 'danger',
+        title: 'Email Address Missing',
+        message: 'No email address is available for this donor receipt.'
+      });
+      return;
+    }
+    const currentTrustName = effectiveTrustName || user?.trustName || 'our Trust';
+    const safeNo = (receipt.receiptNo || 'Receipt').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    // 1. Download PDF to device so it is ready to attach
+    const fileResult = await downloadReceiptPdfFile(receipt);
+
+    // 2. Send email with attached PDF via backend API
+    let backendSuccess = false;
+    try {
+      const resp = await fetch('/api/receipts/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiptId: receipt._id,
+          receiptNo: receipt.receiptNo,
+          email: email,
+          trustEmail: effectiveEmail,
+          trustName: effectiveTrustName,
+          receipt
+        })
+      });
+      const data = await resp.json();
+      if (data.success) {
+        backendSuccess = true;
+      }
+    } catch (apiErr) {
+      console.warn('Backend send-email API error:', apiErr);
+    }
+
     const printUrl = receipt.receiptNo
-      ? `${window.location.origin}/api/receipts/pdf?receiptNo=${encodeURIComponent(receipt.receiptNo)}`
+      ? `${window.location.origin}/api/receipts/pdf?receiptNo=${encodeURIComponent(receipt.receiptNo)}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`
       : `${window.location.origin}/api/receipts/pdf?id=${encodeURIComponent(receipt._id)}`;
+
+    const subject = encodeURIComponent(`Official 80G Donation Receipt - ${receipt.receiptNo} | ${currentTrustName}`);
     const body = encodeURIComponent(
-      `Dear ${receipt.donorName},\n\nThank you for your generous donation of ₹${Number(receipt.amount).toFixed(2)} to ${currentTrustName} under head "${receipt.donationHead}".\n\nReceipt Details:\nReceipt Number: ${receipt.receiptNo}\nReceipt Date: ${receipt.receiptDate}\nDonation Head: ${receipt.donationHead}\nAmount: ₹${Number(receipt.amount).toFixed(2)}\n\nYou can view and download your 80G Donation Receipt PDF here:\n${printUrl}\n\nThank you for supporting our mission!\n\nWarm regards,\n${currentTrustName}`
+      `Dear ${receipt.donorName},\n\n` +
+      `Thank you for your generous donation of ₹${Number(receipt.amount).toFixed(2)} to ${currentTrustName} under head "${receipt.donationHead}".\n\n` +
+      `Receipt Details:\n` +
+      `• Receipt Number: ${receipt.receiptNo}\n` +
+      `• Receipt Date: ${receipt.receiptDate}\n` +
+      `• Donation Head: ${receipt.donationHead}\n` +
+      `• Amount: ₹${Number(receipt.amount).toFixed(2)}\n\n` +
+      `You can view and download your 80G Donation Receipt PDF here:\n${printUrl}\n\n` +
+      `📎 Attached File: Donation_Receipt_${safeNo}.pdf\n\n` +
+      `Thank you for supporting our mission!\n\n` +
+      `Warm regards,\n${currentTrustName}`
     );
+
+    // 3. Try Native Web Share API with file attachment if supported
+    if (fileResult?.file && navigator.canShare && navigator.canShare({ files: [fileResult.file] })) {
+      try {
+        await navigator.share({
+          files: [fileResult.file],
+          title: `Donation Receipt - ${receipt.receiptNo}`,
+          text: `Dear ${receipt.donorName},\n\nPlease find your 80G Donation Receipt attached.\n\nReceipt No: ${receipt.receiptNo}\nAmount: ₹${Number(receipt.amount).toFixed(2)}\nPDF Link: ${printUrl}\n\nWarm regards,\n${currentTrustName}`
+        });
+        return;
+      } catch (shareErr) {
+        if (shareErr.name !== 'AbortError') {
+          console.warn('Native share failed, opening mailto:', shareErr);
+        }
+      }
+    }
+
+    // 4. Open mailto client as standard desktop/web action
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+
+    setPopup({
+      isOpen: true,
+      type: 'success',
+      title: 'Receipt PDF Attached & Sent',
+      message: backendSuccess
+        ? `80G Receipt PDF has been attached and emailed to ${email}. The PDF file was also downloaded to your device.`
+        : `80G Receipt PDF has been downloaded to attach, and your email client has been opened with the complete receipt details and direct PDF link for ${email}.`
+    });
   };
 
   const handleBulkDownload = () => {
@@ -407,8 +563,8 @@ export default function DonationReceiptsPage({ user }) {
                         {Boolean(rec.phone || rec.mobile) && (
                           <button
                             className="action-btn"
-                            title={`Share on WhatsApp (${rec.phone || rec.mobile})`}
-                            onClick={() => handleSendWhatsApp(rec)}
+                            title={`Share on WhatsApp with PDF (${rec.phone || rec.mobile})`}
+                            onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'whatsapp' })}
                             aria-label="Share on WhatsApp"
                           >
                             <svg
@@ -427,8 +583,8 @@ export default function DonationReceiptsPage({ user }) {
                         {Boolean(rec.email) && (
                           <button
                             className="action-btn"
-                            title={`Send Receipt by Email (${rec.email})`}
-                            onClick={() => handleSendEmail(rec)}
+                            title={`Send Receipt by Email with PDF Attached (${rec.email})`}
+                            onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'email' })}
                             aria-label="Send Receipt by Email"
                           >
                             <Mail size={12} />
@@ -489,6 +645,16 @@ export default function DonationReceiptsPage({ user }) {
             </div>
           </div>
         </div>
+
+        {/* Share Receipt Modal (WhatsApp & Email with Attached PDF) */}
+        <ShareReceiptModal
+          isOpen={shareModal.isOpen}
+          receipt={shareModal.receipt}
+          initialMode={shareModal.mode}
+          trustEmail={effectiveEmail}
+          trustName={effectiveTrustName}
+          onClose={() => setShareModal({ isOpen: false, receipt: null, mode: 'whatsapp' })}
+        />
 
         {/* Themed Confirmation & Notification Modal */}
         <SimplePopup

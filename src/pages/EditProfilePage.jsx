@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SimplePopup from '../components/SimplePopup';
+import VerificationDemoModal from '../components/VerificationDemoModal';
 import { ChevronUp, AlertTriangle, AlertCircle, CheckCircle2, Sparkles, User, Trash2 } from 'lucide-react';
 import { getCurrentUser, isSuperUser, getSuperAdminSession, getTrustSession, setSuperAdminSession, setTrustSession } from '../utils/authStorage';
 
@@ -9,6 +10,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   const location = useLocation();
   const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin');
 
+  const [showVerificationDemo, setShowVerificationDemo] = useState(false);
   const [hasLogo, setHasLogo] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [logoError, setLogoError] = useState('');
@@ -207,7 +209,39 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleLogoUpload = (e) => {
+  // Helper to compress and resize images on canvas to prevent LocalStorage QuotaExceededError
+  const compressImage = (file, maxWidth = 400, maxHeight = 200, quality = 0.9) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width;
+          let h = img.height;
+          if (w > maxWidth) {
+            h = Math.round((h * maxWidth) / w);
+            w = maxWidth;
+          }
+          if (h > maxHeight) {
+            w = Math.round((width * maxHeight) / h);
+            h = maxHeight;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/png', quality));
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -223,27 +257,29 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setLogoError('Logo file exceeds maximum 2MB size limit.');
-      setToastMessage('Logo file exceeds maximum 2MB size limit.');
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoError('Logo file exceeds maximum 5MB size limit.');
+      setToastMessage('Logo file exceeds maximum 5MB size limit.');
       if (logoInputRef.current) logoInputRef.current.value = '';
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
     setLogoError('');
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result;
-      setFormData(prev => ({ ...prev, logo: base64 }));
-      setHasLogo(true);
-      setToastMessage('Logo selected! Click Save Profile to apply.');
-      setTimeout(() => setToastMessage(''), 3000);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const base64 = await compressImage(file, 400, 400, 0.9);
+      if (base64) {
+        setFormData(prev => ({ ...prev, logo: base64 }));
+        setHasLogo(true);
+        setToastMessage('Logo selected! Click Submit to apply.');
+        setTimeout(() => setToastMessage(''), 3000);
+      }
+    } catch (err) {
+      console.warn('Logo compression error:', err);
+    }
   };
 
-  const handleSignatureUpload = (e) => {
+  const handleSignatureUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -259,54 +295,58 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setSignatureError('Signature file exceeds maximum 2MB size limit.');
-      setToastMessage('Signature file exceeds maximum 2MB size limit.');
+    if (file.size > 5 * 1024 * 1024) {
+      setSignatureError('Signature file exceeds maximum 5MB size limit.');
+      setToastMessage('Signature file exceeds maximum 5MB size limit.');
       if (signatureInputRef.current) signatureInputRef.current.value = '';
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
     setSignatureError('');
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result;
-      setFormData(prev => ({ ...prev, signature: base64 }));
-      setHasSignature(true);
-      setToastMessage('Signature selected! Click Save Profile to apply.');
-      setTimeout(() => setToastMessage(''), 3000);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const base64 = await compressImage(file, 400, 180, 0.9);
+      if (base64) {
+        setFormData(prev => ({ ...prev, signature: base64 }));
+        setHasSignature(true);
+        setToastMessage('Signature selected! Click Submit to apply.');
+        setTimeout(() => setToastMessage(''), 3000);
+      }
+    } catch (err) {
+      console.warn('Signature compression error:', err);
+    }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (formData.phone && !/^[6-9]\d{9}$/.test(formData.phone)) {
+    if (formData.phone && !/^[6-9]\d{9}$/.test(formData.phone.replace(/\D/g, ''))) {
       setToastMessage('Phone number must be a valid 10-digit number starting with 6, 7, 8, or 9.');
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
-    if (formData.contactPersonMobile && !/^[6-9]\d{9}$/.test(formData.contactPersonMobile)) {
+    if (formData.contactPersonMobile && !/^[6-9]\d{9}$/.test(formData.contactPersonMobile.replace(/\D/g, ''))) {
       setToastMessage('Contact Person Mobile number must be a valid 10-digit number starting with 6, 7, 8, or 9.');
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
-    if (formData.contactPerson && !/^[a-zA-Z\s]+$/.test(formData.contactPerson.trim())) {
-      setToastMessage('Contact Person name must contain only letters and spaces (no numbers or special characters).');
+    if (formData.contactPerson && !/^[a-zA-Z\s.'-]+$/.test(formData.contactPerson.trim())) {
+      setToastMessage('Contact Person name must contain only letters, dots, hyphens, and spaces.');
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
-    if (formData.panNo && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNo.trim())) {
+    const cleanPan = (formData.panNo || '').trim().toUpperCase();
+    if (cleanPan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
       setToastMessage('Please enter a valid 10-character PAN number without special characters (e.g. ABCDE1234F).');
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
-    if (formData.signatoryPan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.signatoryPan.trim())) {
+    const cleanSignatoryPan = (formData.signatoryPan || '').trim().toUpperCase();
+    if (cleanSignatoryPan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanSignatoryPan)) {
       setToastMessage('Signatory PAN must be a valid 10-character PAN number without special characters (e.g. ABCDE1234F).');
       setTimeout(() => setToastMessage(''), 3000);
       return;
@@ -317,10 +357,15 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
-    // Persist changes to user-scoped cache and remove polluted global cache
-    localStorage.removeItem('profile_data');
-    if (formData.email) {
-      localStorage.setItem(`profile_data_${formData.email.toLowerCase()}`, JSON.stringify(formData));
+
+    // Persist changes safely with try-catch to prevent storage quota crash
+    try {
+      localStorage.removeItem('profile_data');
+      if (formData.email) {
+        localStorage.setItem(`profile_data_${formData.email.toLowerCase()}`, JSON.stringify(formData));
+      }
+    } catch (storageErr) {
+      console.warn('LocalStorage save warning:', storageErr);
     }
 
     const existingUser = (isSuperAdmin ? (getSuperAdminSession()?.user || {}) : (getTrustSession()?.user || {})) || {};
@@ -333,7 +378,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       address: formData.address,
       state: formData.state,
       registrationNo: formData.registrationNo,
-      panNo: formData.panNo,
+      panNo: cleanPan || formData.panNo,
       section80GRegNo: formData.reg12ANo || existingUser.section80GRegNo || '',
       reg12ANo: formData.reg12ANo || '',
       reg12ADate: formData.reg12ADate || '',
@@ -344,15 +389,19 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       logo: formData.logo || '',
       signature: formData.signature || '',
       signatoryName: formData.contactPerson || `${formData.firstName || ''} ${formData.surname || ''}`.trim() || '',
-      signatoryPan: formData.signatoryPan || formData.panNo || '',
+      signatoryPan: cleanSignatoryPan || formData.signatoryPan || formData.panNo || '',
       isSuperAdmin: isSuperAdmin,
       role: isSuperAdmin ? 'SuperAdmin' : (existingUser.role || 'Admin')
     };
 
-    if (isSuperAdmin) {
-      setSuperAdminSession(updatedUser);
-    } else {
-      setTrustSession(updatedUser);
+    try {
+      if (isSuperAdmin) {
+        setSuperAdminSession(updatedUser);
+      } else {
+        setTrustSession(updatedUser);
+      }
+    } catch (sessionErr) {
+      console.warn('Session save warning:', sessionErr);
     }
 
     if (onUpdateUser) {
@@ -367,7 +416,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedUser)
-        }).catch(() => {});
+        }).catch((err) => console.warn('Backend profile update failed:', err));
       }
     } catch (e) {}
 
@@ -375,7 +424,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     setTimeout(() => {
       setToastMessage('');
       navigate(isSuperAdmin ? '/superadmin/my-profile' : '/trust/my-profile');
-    }, 1200);
+    }, 1000);
   };
 
   const scrollToTop = () => {
@@ -707,18 +756,23 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               <h3 style={{ fontSize: '15px', fontWeight: '700', textDecoration: 'underline', color: '#111', margin: 0 }}>
                 Authorized Person Details: (This will be shown in Verification part of receipt)
               </h3>
-              <span
+              <button
+                type="button"
+                onClick={() => setShowVerificationDemo(true)}
                 style={{
                   backgroundColor: '#0d6efd',
                   color: '#ffffff',
                   fontSize: '11px',
                   fontWeight: '700',
                   padding: '2px 8px',
-                  borderRadius: '3px'
+                  borderRadius: '3px',
+                  border: 'none',
+                  cursor: 'pointer'
                 }}
+                title="Click to view Verification Demo Preview"
               >
                 Demo
-              </span>
+              </button>
             </div>
 
             {/* Row 1: 4 columns */}
@@ -971,6 +1025,12 @@ export default function EditProfilePage({ user, onUpdateUser }) {
         cancelText="Cancel"
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
+      />
+
+      {/* Verification Demo Modal */}
+      <VerificationDemoModal
+        isOpen={showVerificationDemo}
+        onClose={() => setShowVerificationDemo(false)}
       />
 
       {/* Top-Right Success Notification */}

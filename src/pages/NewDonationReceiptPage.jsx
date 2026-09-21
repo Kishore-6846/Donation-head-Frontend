@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
+import VerificationDemoModal from '../components/VerificationDemoModal';
 import { Sparkles, List, AlertCircle, Trash2 } from 'lucide-react';
 import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
@@ -111,6 +112,8 @@ export default function NewDonationReceiptPage({ user }) {
   const [heads, setHeads] = useState(getInitialHeads);
   const [receiptTypes, setReceiptTypes] = useState(['Corpus', 'Voluntary', 'Earmarked Fund']);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [showVerificationDemo, setShowVerificationDemo] = useState(false);
 
   // Field validation errors state for custom Red Border & Message Indicator UI
   const [fieldErrors, setFieldErrors] = useState({});
@@ -1099,7 +1102,9 @@ export default function NewDonationReceiptPage({ user }) {
             <div>
               <label style={labelStyle}>
                 Attach Verification with receipt?
-                <span
+                <button
+                  type="button"
+                  onClick={() => setShowVerificationDemo(true)}
                   style={{
                     backgroundColor: '#007bff',
                     color: '#ffffff',
@@ -1107,11 +1112,14 @@ export default function NewDonationReceiptPage({ user }) {
                     fontWeight: '600',
                     padding: '2px 8px',
                     borderRadius: '4px',
-                    marginLeft: '8px'
+                    marginLeft: '8px',
+                    border: 'none',
+                    cursor: 'pointer'
                   }}
+                  title="Click to view Verification Demo Preview"
                 >
                   Demo
-                </span>
+                </button>
               </label>
               <div className="radio-group-wrap">
                 <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
@@ -1156,6 +1164,12 @@ export default function NewDonationReceiptPage({ user }) {
           </div>
         </form>
       </div>
+
+      {/* Verification Demo Modal */}
+      <VerificationDemoModal
+        isOpen={showVerificationDemo}
+        onClose={() => setShowVerificationDemo(false)}
+      />
 
       {/* Themed Dialog Popup */}
       <SimplePopup

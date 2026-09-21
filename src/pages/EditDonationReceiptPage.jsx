@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
+import VerificationDemoModal from '../components/VerificationDemoModal';
 import { Sparkles, List, AlertCircle, Trash2 } from 'lucide-react';
 
 // Accurate Indian Numbering System to Words Converter
@@ -103,6 +104,8 @@ export default function EditDonationReceiptPage({ user }) {
   const [heads, setHeads] = useState(getInitialHeads);
   const [receiptTypes, setReceiptTypes] = useState(['Corpus', 'Voluntary', 'Earmarked Fund']);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [showVerificationDemo, setShowVerificationDemo] = useState(false);
 
   // Field validation errors state
   const [fieldErrors, setFieldErrors] = useState({});
@@ -982,7 +985,9 @@ export default function EditDonationReceiptPage({ user }) {
             <div>
               <label style={{ ...labelStyle, display: 'inline-flex', alignItems: 'center' }}>
                 Attach Verification with receipt?
-                <span
+                <button
+                  type="button"
+                  onClick={() => setShowVerificationDemo(true)}
                   style={{
                     backgroundColor: '#007bff',
                     color: '#ffffff',
@@ -991,11 +996,14 @@ export default function EditDonationReceiptPage({ user }) {
                     padding: '2px 8px',
                     borderRadius: '3px',
                     marginLeft: '8px',
-                    lineHeight: '14px'
+                    lineHeight: '14px',
+                    border: 'none',
+                    cursor: 'pointer'
                   }}
+                  title="Click to view Verification Demo Preview"
                 >
                   Demo
-                </span>
+                </button>
               </label>
               <div className="radio-group-wrap">
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
@@ -1039,6 +1047,12 @@ export default function EditDonationReceiptPage({ user }) {
           </div>
         </form>
       </div>
+
+      {/* Verification Demo Modal */}
+      <VerificationDemoModal
+        isOpen={showVerificationDemo}
+        onClose={() => setShowVerificationDemo(false)}
+      />
 
       {/* Popup / Notifications */}
       <SimplePopup
