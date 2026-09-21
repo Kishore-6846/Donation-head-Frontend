@@ -174,6 +174,12 @@ export default function EditProfilePage({ user, onUpdateUser }) {
                 middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : prev.middleName,
                 surname: parts.length > 1 ? parts[parts.length - 1] : prev.surname,
                 signatoryPan: u.signatoryPan || u.panNo || prev.signatoryPan,
+                designation: u.designation || prev.designation || 'Authorized Signatory',
+                emailSubject: u.emailSubject !== undefined ? u.emailSubject : prev.emailSubject,
+                emailBody: u.emailBody !== undefined ? u.emailBody : prev.emailBody,
+                receiptPrefix: u.receiptPrefix !== undefined ? u.receiptPrefix : prev.receiptPrefix,
+                receiptStartNumber: u.receiptStartNumber !== undefined ? String(u.receiptStartNumber) : prev.receiptStartNumber,
+                receiptWatermarkText: u.receiptWatermarkText !== undefined ? u.receiptWatermarkText : prev.receiptWatermarkText,
                 logo: u.logo || prev.logo || '',
                 signature: u.signature || prev.signature || ''
               }));
@@ -210,33 +216,32 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   };
 
   // Helper to compress and resize images on canvas to prevent LocalStorage QuotaExceededError
-  const compressImage = (file, maxWidth = 400, maxHeight = 200, quality = 0.9) => {
+  const compressImage = (file, maxWidth, maxHeight, quality = 0.85) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          let w = img.width;
-          let h = img.height;
-          if (w > maxWidth) {
-            h = Math.round((h * maxWidth) / w);
-            w = maxWidth;
-          }
-          if (h > maxHeight) {
-            w = Math.round((width * maxHeight) / h);
-            h = maxHeight;
-          }
           const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+
+          canvas.width = width;
+          canvas.height = height;
           const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL('image/png', quality));
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
         };
-        img.onerror = () => resolve(e.target.result);
         img.src = e.target.result;
       };
-      reader.onerror = () => resolve(null);
       reader.readAsDataURL(file);
     });
   };
@@ -317,7 +322,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (formData.phone && !/^[6-9]\d{9}$/.test(formData.phone.replace(/\D/g, ''))) {
@@ -382,6 +387,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       section80GRegNo: formData.reg12ANo || existingUser.section80GRegNo || '',
       reg12ANo: formData.reg12ANo || '',
       reg12ADate: formData.reg12ADate || '',
+      fcraNo: formData.fcraNo || '',
       website: formData.website,
       contactPerson: formData.contactPerson,
       contactPersonEmail: formData.contactPersonEmail,
@@ -390,6 +396,12 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       signature: formData.signature || '',
       signatoryName: formData.contactPerson || `${formData.firstName || ''} ${formData.surname || ''}`.trim() || '',
       signatoryPan: cleanSignatoryPan || formData.signatoryPan || formData.panNo || '',
+      designation: formData.designation || 'Authorized Signatory',
+      emailSubject: formData.emailSubject || '',
+      emailBody: formData.emailBody || '',
+      receiptPrefix: formData.receiptPrefix !== undefined ? formData.receiptPrefix : '',
+      receiptStartNumber: formData.receiptStartNumber !== undefined ? String(formData.receiptStartNumber) : '1',
+      receiptWatermarkText: formData.receiptWatermarkText !== undefined ? formData.receiptWatermarkText : '',
       isSuperAdmin: isSuperAdmin,
       role: isSuperAdmin ? 'SuperAdmin' : (existingUser.role || 'Admin')
     };
@@ -412,13 +424,15 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     try {
       const targetId = existingUser._id || existingUser.id || existingUser.email || formData.email;
       if (targetId) {
-        fetch(`/api/users/${encodeURIComponent(targetId)}`, {
+        await fetch(`/api/users/${encodeURIComponent(targetId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedUser)
-        }).catch((err) => console.warn('Backend profile update failed:', err));
+        });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Backend profile update failed:', e);
+    }
 
     setToastMessage('Profile updated successfully!');
     setTimeout(() => {

@@ -178,14 +178,21 @@ export default function NewDonationReceiptPage({ user }) {
     const uEmail = (activeUser?.email || '').toLowerCase().trim();
     let tName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || (!isSuperUser(activeUser) ? activeUser?.name : '');
     let pPrefix = '';
+    let pStart = '';
     try {
       if (uEmail) {
         const p = JSON.parse(localStorage.getItem(`profile_data_${uEmail}`) || '{}');
         if (p.name) tName = p.name;
-        if (p.receiptPrefix) pPrefix = p.receiptPrefix.replace(/\/?(20\d\d-\d\d\/?)?$/, '').replace(/[^a-zA-Z0-9]/g, '');
+        if (p.receiptPrefix) pPrefix = p.receiptPrefix;
+        if (p.receiptStartNumber) pStart = p.receiptStartNumber;
       }
     } catch(e) {}
-    const query = pPrefix ? `?prefix=${encodeURIComponent(pPrefix)}` : (tName ? `?trustName=${encodeURIComponent(tName)}` : '');
+    const nextParams = [];
+    if (pPrefix) nextParams.push(`prefix=${encodeURIComponent(pPrefix)}`);
+    if (pStart) nextParams.push(`startNumber=${encodeURIComponent(pStart)}`);
+    if (tName) nextParams.push(`trustName=${encodeURIComponent(tName)}`);
+    if (uEmail) nextParams.push(`trustEmail=${encodeURIComponent(uEmail)}`);
+    const query = nextParams.length > 0 ? `?${nextParams.join('&')}` : '';
     fetch(`/api/receipts/next-number${query}`)
       .then(res => res.json())
       .then(data => {
@@ -222,11 +229,41 @@ export default function NewDonationReceiptPage({ user }) {
         setHeads(deduplicateHeads([...custom, ...DEFAULT_HEADS]));
       });
 
-    fetch('/api/receipts/donors')
+    const donorsQuery = isSuperAdmin
+      ? '?isSuperAdmin=true'
+      : (uEmail
+          ? `?trustEmail=${encodeURIComponent(uEmail)}&trustName=${encodeURIComponent(tName)}`
+          : (tName ? `?trustName=${encodeURIComponent(tName)}` : ''));
+
+    const token = localStorage.getItem('token') || trustSession?.token || '';
+    const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+    if (uEmail) authHeaders['x-trust-email'] = uEmail;
+    if (tName) authHeaders['x-trust-name'] = tName;
+
+    fetch(`/api/receipts/donors${donorsQuery}`, {
+      headers: authHeaders
+    })
       .then(res => res.json())
       .then(data => {
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          setDonors(data.data);
+        if (data.success && Array.isArray(data.data)) {
+          let list = data.data;
+          // Client-side guard for strict trust isolation
+          if (!isSuperAdmin && (uEmail || (tName && tName.toLowerCase() !== 'trust organization'))) {
+            const eLower = uEmail.toLowerCase();
+            const tLower = tName.toLowerCase();
+            list = list.filter(d => {
+              if (!d) return false;
+              const dEmail = (d.trustEmail || '').toLowerCase();
+              const dTrust = (d.trustName || '').toLowerCase();
+              if (dEmail || dTrust) {
+                const matchEmail = eLower && dEmail && dEmail === eLower;
+                const matchTrust = tLower && tLower !== 'trust organization' && dTrust && dTrust === tLower;
+                return matchEmail || matchTrust;
+              }
+              return true;
+            });
+          }
+          setDonors(list);
         }
       })
       .catch(err => console.error('Error fetching donors:', err));

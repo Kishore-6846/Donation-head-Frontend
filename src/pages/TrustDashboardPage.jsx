@@ -65,10 +65,22 @@ export default function TrustDashboardPage({ user }) {
   const effectiveUser = (!isSuperUser(user) && user) || trustSession?.user || null;
   const isDefaultAdmin = !effectiveUser?.email;
 
+  const getInitialVaultCount = () => {
+    try {
+      const certKey = isDefaultAdmin ? 'certificates_data' : `certificates_data_${effectiveUser?.email}`;
+      const savedCerts = localStorage.getItem(certKey);
+      if (savedCerts) {
+        const parsed = JSON.parse(savedCerts);
+        if (Array.isArray(parsed)) return parsed.length;
+      }
+    } catch (e) {}
+    return 0;
+  };
+
   // Show actual real counts for all receipts and vault certificates
   const [stats, setStats] = useState({
     allReceipts: 0,
-    vaultCount: 0
+    vaultCount: getInitialVaultCount()
   });
   const [notifications, setNotifications] = useState([]);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
@@ -148,19 +160,20 @@ export default function TrustDashboardPage({ user }) {
       })
       .catch(console.error);
 
-    // Sync vault count directly from user-specific certificates in localStorage
-    try {
-      const certKey = isDefaultAdmin ? 'certificates_data' : `certificates_data_${effectiveUser?.email}`;
-      const savedCerts = localStorage.getItem(certKey);
-      if (savedCerts) {
-        const parsed = JSON.parse(savedCerts);
-        if (Array.isArray(parsed)) {
-          setStats(prev => ({ ...prev, vaultCount: parsed.length }));
+    // Sync vault count directly from /api/certificates
+    const certParam = effectiveEmail ? `?trustEmail=${encodeURIComponent(effectiveEmail)}` : '';
+    fetch(`/api/certificates${certParam}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.data)) {
+          setStats(prev => ({ ...prev, vaultCount: d.data.length }));
+          try {
+            const certKey = isDefaultAdmin ? 'certificates_data' : `certificates_data_${effectiveEmail}`;
+            localStorage.setItem(certKey, JSON.stringify(d.data));
+          } catch (e) {}
         }
-      } else if (!isDefaultAdmin) {
-        setStats(prev => ({ ...prev, vaultCount: 0 }));
-      }
-    } catch (e) {}
+      })
+      .catch(() => {});
 
     const activeUser = effectiveUser;
     const tName = activeUser?.trustName || (activeUser?.name && !isSuperUser(activeUser) ? activeUser.name : '');

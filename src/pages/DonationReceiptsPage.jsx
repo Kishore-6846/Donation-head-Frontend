@@ -116,8 +116,10 @@ export default function DonationReceiptsPage({ user }) {
 
 
   const handleToggleStatus = (receipt) => {
-    const nextStatus = receipt.status === 'Active' ? 'Inactive' : 'Active';
-    const isMovingToInactive = receipt.status === 'Active';
+    const currentStatus = receipt.status || 'Active';
+    const nextStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    const isMovingToInactive = currentStatus === 'Active';
+    const targetId = receipt._id || receipt.id || receipt.receiptNo;
 
     setPopup({
       isOpen: true,
@@ -130,14 +132,21 @@ export default function DonationReceiptsPage({ user }) {
       cancelText: 'Cancel',
       onConfirm: async () => {
         try {
-          await fetch(`/api/receipts/${receipt._id}/status`, {
+          const res = await fetch(`/api/receipts/${encodeURIComponent(targetId)}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: nextStatus })
+            body: JSON.stringify({ status: nextStatus, receiptNo: receipt.receiptNo })
           });
-          fetchReceipts();
+          if (!res.ok) {
+            await fetch(`/api/receipts/${encodeURIComponent(targetId)}/status`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: nextStatus, receiptNo: receipt.receiptNo })
+            });
+          }
+          await fetchReceipts();
         } catch (e) {
-          console.error(e);
+          console.error('Error toggling receipt status:', e);
         }
         setPopup(p => ({ ...p, isOpen: false }));
       },
