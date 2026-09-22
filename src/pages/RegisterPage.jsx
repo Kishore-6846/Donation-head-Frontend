@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import navLogo from '../assets/Receipt-Nav-Logo.png';
 import { Lock, FileText, CheckCircle2, AlertCircle, Upload, Eye, EyeOff, Shield, ArrowRight, Trash2 } from 'lucide-react';
+import SimplePopup from '../components/SimplePopup';
 import { setTrustSession } from '../utils/authStorage';
+import { parseResponseSafe } from '../utils/api';
 
 const INDIAN_STATES = [
   'Andaman Nicobar',
@@ -83,12 +85,18 @@ export default function RegisterPage({ onLoginSuccess }) {
     amount: ''
   });
 
+  // Duplicate Email Warning Modal State
+  const [duplicateEmailModal, setDuplicateEmailModal] = useState({
+    isOpen: false,
+    email: ''
+  });
+
   // Dynamically load active plans from SuperAdmin plans API
   useEffect(() => {
     fetch('/api/plans?status=Active')
-      .then(r => r.json())
+      .then(r => parseResponseSafe(r))
       .then(d => {
-        if (d.success && Array.isArray(d.data) && d.data.length > 0) {
+        if (d && d.success && Array.isArray(d.data) && d.data.length > 0) {
           setPlans(d.data);
           setFormData(prev => ({
             ...prev,
@@ -97,9 +105,9 @@ export default function RegisterPage({ onLoginSuccess }) {
         } else {
           // Fallback to all plans if no Active query match
           fetch('/api/plans')
-            .then(r2 => r2.json())
+            .then(r2 => parseResponseSafe(r2))
             .then(d2 => {
-              if (d2.success && Array.isArray(d2.data) && d2.data.length > 0) {
+              if (d2 && d2.success && Array.isArray(d2.data) && d2.data.length > 0) {
                 setPlans(d2.data);
                 setFormData(prev => ({
                   ...prev,
@@ -374,6 +382,31 @@ export default function RegisterPage({ onLoginSuccess }) {
     setLoading(true);
 
     try {
+      // 0. Pre-check: Verify if email is already registered BEFORE taking payment
+      try {
+        const checkRes = await fetch('/api/auth/check-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: formData.email.trim().toLowerCase() })
+        });
+        const checkData = await parseResponseSafe(checkRes);
+
+        if (checkData && checkData.exists) {
+          setLoading(false);
+          setFieldErrors(prev => ({
+            ...prev,
+            email: 'An account with this Email ID already exists. Please log in.'
+          }));
+          setDuplicateEmailModal({
+            isOpen: true,
+            email: formData.email.trim()
+          });
+          return; // STOP! Do not open Razorpay payment gateway
+        }
+      } catch (checkErr) {
+        console.warn('Email pre-check notice:', checkErr);
+      }
+
       // 1. Ensure Razorpay Checkout script is loaded
       const isScriptLoaded = await loadRazorpayScript();
       if (!isScriptLoaded || !window.Razorpay) {
@@ -393,7 +426,7 @@ export default function RegisterPage({ onLoginSuccess }) {
         })
       });
 
-      const orderData = await orderRes.json();
+      const orderData = await parseResponseSafe(orderRes);
       if (!orderData.success) {
         throw new Error(orderData.message || 'Failed to initialize subscription payment order');
       }
@@ -448,7 +481,7 @@ export default function RegisterPage({ onLoginSuccess }) {
               body: JSON.stringify(payload)
             });
 
-            const regData = await regRes.json();
+            const regData = await parseResponseSafe(regRes);
 
             if (regData.success) {
               setPendingApprovalModal({
@@ -1209,6 +1242,29 @@ export default function RegisterPage({ onLoginSuccess }) {
           </div>
         </div>
       )}
+
+      {/* Duplicate Email Warning Popup using standard site design model */}
+      <SimplePopup
+        isOpen={duplicateEmailModal.isOpen}
+        type="error"
+        title="Email Already Registered"
+        message={`The email address "${duplicateEmailModal.email}" is already registered with an existing account. Please log in to your account or register using a different email address.`}
+        confirmText="Go to Login"
+        showCancel={true}
+        cancelText="Change Email"
+        onConfirm={() => {
+          setDuplicateEmailModal({ isOpen: false, email: '' });
+          navigate('/trust/login');
+        }}
+        onCancel={() => {
+          setDuplicateEmailModal({ isOpen: false, email: '' });
+          const emailInput = document.querySelector('input[type="email"]') || document.getElementById('email');
+          if (emailInput) {
+            emailInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            emailInput.focus();
+          }
+        }}
+      />
 
       {/* Website Footer Area */}
       <footer style={{ backgroundColor: '#ffffff', borderTop: '1px solid #eef2f5', padding: '20px 0' }}>

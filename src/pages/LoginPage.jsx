@@ -4,6 +4,7 @@ import navLogo from '../assets/Receipt-Nav-Logo.png';
 import SimplePopup from '../components/SimplePopup';
 import { Eye, EyeOff, Lock, AlertCircle, Shield, ArrowRight, KeyRound, X, CheckCircle2 } from 'lucide-react';
 import { setTrustSession, setSuperAdminSession, isSuperUser } from '../utils/authStorage';
+import { parseResponseSafe } from '../utils/api';
 
 export default function LoginPage({ onLoginSuccess }) {
   const navigate = useNavigate();
@@ -182,7 +183,7 @@ export default function LoginPage({ onLoginSuccess }) {
         })
       });
 
-      const data = await res.json();
+      const data = await parseResponseSafe(res);
       if (data.success) {
         setShowForgotModal(false);
         setUsername(forgotEmail.trim().toLowerCase());
@@ -193,7 +194,7 @@ export default function LoginPage({ onLoginSuccess }) {
         setForgotGlobalError(data.message || 'Failed to update password. Please check your email and try again.');
       }
     } catch (err) {
-      setForgotGlobalError('Unable to connect to server. Please try again later.');
+      setForgotGlobalError('Unable to connect to server. Please try again in a moment.');
     } finally {
       setForgotSubmitting(false);
     }
@@ -230,7 +231,7 @@ export default function LoginPage({ onLoginSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: trimmedUser, password })
       });
-      const data = await res.json();
+      const data = await parseResponseSafe(res);
 
       if (data.success) {
         const isSuper = isSuperUser(data.user) || trimmedUser.toLowerCase().includes('superadmin');

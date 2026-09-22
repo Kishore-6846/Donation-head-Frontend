@@ -4,6 +4,7 @@ import navLogo from '../assets/Receipt-Nav-Logo.png';
 import SimplePopup from '../components/SimplePopup';
 import { Eye, EyeOff, Lock, AlertCircle, Shield, ArrowRight, KeyRound, X, CheckCircle2 } from 'lucide-react';
 import { setSuperAdminSession } from '../utils/authStorage';
+import { parseResponseSafe } from '../utils/api';
 
 export default function SuperAdminLoginPage({ onLoginSuccess }) {
   const navigate = useNavigate();
@@ -183,7 +184,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
         })
       });
 
-      const data = await res.json();
+      const data = await parseResponseSafe(res);
       if (data.success) {
         setShowForgotModal(false);
         setUsername(forgotEmail.trim().toLowerCase());
@@ -194,7 +195,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
         setForgotGlobalError(data.message || 'Failed to update password. Please check credentials.');
       }
     } catch (err) {
-      setForgotGlobalError('Unable to connect to server. Please try again later.');
+      setForgotGlobalError('Unable to connect to server. Please try again in a moment.');
     } finally {
       setForgotSubmitting(false);
     }
@@ -236,7 +237,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
           role: 'Super Admin'
         })
       });
-      const data = await res.json();
+      const data = await parseResponseSafe(res);
 
       if (data.success) {
         const superAdminUser = {
