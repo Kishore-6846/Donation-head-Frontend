@@ -21,6 +21,72 @@ const defaultPermissions = {
   }
 };
 
+// Format date accurately to Indian Standard Time (IST - Asia/Kolkata): DD-MM-YYYY hh:mm:ss AM/PM
+const formatToIST = (dateInput = new Date()) => {
+  if (!dateInput) return '';
+
+  if (typeof dateInput === 'string' && /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}$/.test(dateInput.trim())) {
+    const [dPart, tPart] = dateInput.trim().split(' ');
+    const [day, month, year] = dPart.split('-');
+    const [hh, mm, ss] = tPart.split(':');
+    let h = parseInt(hh, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    const strH = String(h).padStart(2, '0');
+    return `${day}-${month}-${year} ${strH}:${mm}:${ss} ${ampm}`;
+  }
+
+  if (typeof dateInput === 'string' && /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}(:\d{2})?\s*(AM|PM|am|pm)$/i.test(dateInput.trim())) {
+    return dateInput.trim().toUpperCase();
+  }
+
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return String(dateInput);
+
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    }).formatToParts(d);
+
+    let day = '', month = '', year = '', hour = '', minute = '', second = '', dayPeriod = '';
+    for (const p of parts) {
+      if (p.type === 'day') day = p.value;
+      else if (p.type === 'month') month = p.value;
+      else if (p.type === 'year') year = p.value;
+      else if (p.type === 'hour') hour = p.value;
+      else if (p.type === 'minute') minute = p.value;
+      else if (p.type === 'second') second = p.value;
+      else if (p.type === 'dayPeriod') dayPeriod = p.value;
+    }
+
+    const strHour = String(hour).padStart(2, '0');
+    const strMin = String(minute).padStart(2, '0');
+    const strSec = String(second).padStart(2, '0');
+    const ampm = (dayPeriod || (d.getHours() >= 12 ? 'PM' : 'AM')).toUpperCase();
+
+    return `${day}-${month}-${year} ${strHour}:${strMin}:${strSec} ${ampm}`;
+  } catch (e) {
+    const d = new Date(dateInput);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    let hours = d.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const strHours = String(hours).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${day}-${month}-${year} ${strHours}:${minutes}:${seconds} ${ampm}`;
+  }
+};
+
 export default function AddRolePage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -107,14 +173,7 @@ export default function AddRolePage() {
     setInlineError('');
 
     setIsSubmitting(true);
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = now.getFullYear();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const dateStr = `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+    const dateStr = formatToIST(new Date());
 
     if (editId) {
       // Edit existing role

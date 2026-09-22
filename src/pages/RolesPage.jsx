@@ -5,6 +5,102 @@ import SimplePopup from '../components/SimplePopup';
 import { Plus, Eye, Pencil, Trash2, AlertTriangle, CheckCircle2, Sparkles, Shield, X, Check, Minus, Users, Mail, Phone } from 'lucide-react';
 import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
+// Format any date/timestamp accurately to Indian Standard Time (IST - Asia/Kolkata): DD-MM-YYYY hh:mm:ss AM/PM
+const formatToIST = (dateInput) => {
+  if (!dateInput) return '';
+
+  // If already a 24-hour string like DD-MM-YYYY HH:mm:ss, convert to 12-hour AM/PM
+  if (typeof dateInput === 'string' && /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}$/.test(dateInput.trim())) {
+    const [dPart, tPart] = dateInput.trim().split(' ');
+    const [day, month, year] = dPart.split('-');
+    const [hh, mm, ss] = tPart.split(':');
+    let h = parseInt(hh, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    const strH = String(h).padStart(2, '0');
+    return `${day}-${month}-${year} ${strH}:${mm}:${ss} ${ampm}`;
+  }
+
+  // If already a 12-hour format string, return formatted
+  if (typeof dateInput === 'string' && /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}(:\d{2})?\s*(AM|PM|am|pm)$/i.test(dateInput.trim())) {
+    return dateInput.trim().toUpperCase();
+  }
+
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return String(dateInput);
+
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    }).formatToParts(d);
+
+    let day = '', month = '', year = '', hour = '', minute = '', second = '', dayPeriod = '';
+    for (const p of parts) {
+      if (p.type === 'day') day = p.value;
+      else if (p.type === 'month') month = p.value;
+      else if (p.type === 'year') year = p.value;
+      else if (p.type === 'hour') hour = p.value;
+      else if (p.type === 'minute') minute = p.value;
+      else if (p.type === 'second') second = p.value;
+      else if (p.type === 'dayPeriod') dayPeriod = p.value;
+    }
+
+    const strHour = String(hour).padStart(2, '0');
+    const strMin = String(minute).padStart(2, '0');
+    const strSec = String(second).padStart(2, '0');
+    const ampm = (dayPeriod || (d.getHours() >= 12 ? 'PM' : 'AM')).toUpperCase();
+
+    return `${day}-${month}-${year} ${strHour}:${strMin}:${strSec} ${ampm}`;
+  } catch (e) {
+    const d = new Date(dateInput);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    let hours = d.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const strHours = String(hours).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${day}-${month}-${year} ${strHours}:${minutes}:${seconds} ${ampm}`;
+  }
+};
+
+const formatRoleCreated = (role) => {
+  if (!role) return '';
+
+  // 1. If createdAt exists as ISO timestamp or Date object
+  if (role.createdAt) {
+    const formatted = formatToIST(role.createdAt);
+    if (formatted) return formatted;
+  }
+
+  // 2. If created string exists
+  const raw = role.created || role.date;
+  if (raw && typeof raw === 'string' && raw.trim()) {
+    // If it's the old hardcoded dummy date, ignore it
+    if (raw.trim() !== '10-09-2026 06:06:25') {
+      const formatted = formatToIST(raw);
+      if (formatted) return formatted;
+    }
+  }
+
+  // 3. If updatedAt exists
+  if (role.updatedAt) {
+    const formatted = formatToIST(role.updatedAt);
+    if (formatted) return formatted;
+  }
+
+  return formatToIST(new Date());
+};
+
 export default function RolesPage({ user: propUser }) {
   const navigate = useNavigate();
 
@@ -235,7 +331,7 @@ export default function RolesPage({ user: propUser }) {
                     <tr key={r._id || i}>
                       <td style={tdStyle}>{i + 1}</td>
                       <td style={{ ...tdStyle, color: '#212529', fontWeight: 600 }}>{r.roleName}</td>
-                      <td style={{ ...tdStyle, color: '#555' }}>{r.created || '10-09-2026 06:06:25'}</td>
+                      <td style={{ ...tdStyle, color: '#555' }}>{formatRoleCreated(r)}</td>
                       <td style={tdStyle}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                           {/* Members Button with Users icon */}
@@ -479,7 +575,7 @@ export default function RolesPage({ user: propUser }) {
                             </div>
                           </td>
                           <td style={{ padding: '12px', fontSize: '13px', color: '#555' }}>
-                            {m.createdAt ? new Date(m.createdAt).toLocaleDateString('en-GB') : 'Today'}
+                            {m.createdAt ? formatToIST(m.createdAt) : (m.created ? formatToIST(m.created) : 'Today')}
                           </td>
                         </tr>
                       ))}
