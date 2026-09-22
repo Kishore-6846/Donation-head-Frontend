@@ -97,10 +97,10 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       reg12ANo: savedUser?.reg12ANo || savedUser?.section80GRegNo || savedUser?.registrationNo || '',
       reg12ADate: savedUser?.reg12ADate || new Date().toISOString().split('T')[0],
 
-      firstName: parts[0] || '',
-      middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : '',
-      surname: parts.length > 1 ? parts[parts.length - 1] : '',
-      signatoryPan: savedUser?.signatoryPan || savedUser?.panNo || '',
+      firstName: savedUser?.firstName !== undefined ? savedUser.firstName : (parts[0] || ''),
+      middleName: savedUser?.middleName !== undefined ? savedUser.middleName : (parts.length > 2 ? parts.slice(1, -1).join(' ') : ''),
+      surname: savedUser?.surname !== undefined ? savedUser.surname : (parts.length > 1 ? parts[parts.length - 1] : ''),
+      signatoryPan: savedUser?.signatoryPan || '',
       designation: savedUser?.designation || 'Authorized Signatory',
 
       emailSubject: savedUser?.emailSubject || `Thank You & Stay Connected! - ${tName || 'Our Organization'}`,
@@ -177,10 +177,10 @@ export default function EditProfilePage({ user, onUpdateUser }) {
                 registrationType: u.registrationType || prev.registrationType || '12A',
                 reg12ANo: u.reg12ANo || u.section80GRegNo || prev.reg12ANo || '',
                 reg12ADate: u.reg12ADate || prev.reg12ADate,
-                firstName: parts[0] || prev.firstName,
-                middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : prev.middleName,
-                surname: parts.length > 1 ? parts[parts.length - 1] : prev.surname,
-                signatoryPan: u.signatoryPan || u.panNo || prev.signatoryPan,
+                firstName: u.firstName !== undefined ? u.firstName : (prev.firstName || parts[0] || ''),
+                middleName: u.middleName !== undefined ? u.middleName : (prev.middleName || (parts.length > 2 ? parts.slice(1, -1).join(' ') : '')),
+                surname: u.surname !== undefined ? u.surname : (prev.surname || (parts.length > 1 ? parts[parts.length - 1] : '')),
+                signatoryPan: u.signatoryPan !== undefined ? u.signatoryPan : prev.signatoryPan,
                 designation: u.designation || prev.designation || 'Authorized Signatory',
                 emailSubject: u.emailSubject !== undefined ? u.emailSubject : prev.emailSubject,
                 emailBody: u.emailBody !== undefined ? u.emailBody : prev.emailBody,
@@ -386,10 +386,12 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     const finalLogo = removeLogoFlag ? '' : (formData.logo || existingUser.logo || '');
     const finalSignature = removeSignatureFlag ? '' : (formData.signature || existingUser.signature || '');
 
+    const cleanSignatoryName = [formData.firstName, formData.middleName, formData.surname].filter(Boolean).join(' ').trim();
+
     const updatedUser = {
       ...existingUser,
       trustName: formData.name,
-      name: formData.contactPerson || formData.name,
+      name: formData.name || formData.contactPerson,
       email: formData.email,
       mobile: formData.phone,
       address: formData.address,
@@ -406,8 +408,11 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       contactPersonMobile: formData.contactPersonMobile,
       logo: finalLogo,
       signature: finalSignature,
-      signatoryName: formData.contactPerson || `${formData.firstName || ''} ${formData.surname || ''}`.trim() || '',
-      signatoryPan: cleanSignatoryPan || formData.signatoryPan || formData.panNo || '',
+      firstName: formData.firstName || '',
+      middleName: formData.middleName || '',
+      surname: formData.surname || '',
+      signatoryName: cleanSignatoryName || existingUser.signatoryName || '',
+      signatoryPan: cleanSignatoryPan || formData.signatoryPan || '',
       designation: formData.designation || 'Authorized Signatory',
       emailSubject: formData.emailSubject || '',
       emailBody: formData.emailBody || '',

@@ -310,7 +310,7 @@ export default function AllCertificatesPage({ user }) {
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {/* Green Edit button */}
                       <button
-                        onClick={() => navigate('/trust/new-certificate')}
+                        onClick={() => navigate(`/trust/new-certificate?id=${encodeURIComponent(cert._id || cert.id || '')}&regNo=${encodeURIComponent(cert.regNo || '')}`, { state: { cert } })}
                         style={{
                           backgroundColor: '#ecfdf5',
                           border: '1px solid rgba(16, 185, 129, 0.25)',
@@ -332,7 +332,7 @@ export default function AllCertificatesPage({ user }) {
                           e.currentTarget.style.backgroundColor = '#ecfdf5';
                           e.currentTarget.style.color = '#059669';
                         }}
-                        title="Edit"
+                        title="Edit Certificate"
                       >
                         <Pencil size={13} strokeWidth={2.2} />
                       </button>

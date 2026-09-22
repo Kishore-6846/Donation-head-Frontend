@@ -40,30 +40,83 @@ export default function AllReceiptsAdminPage() {
         const data = await receiptsRes.value.json();
         if (data.success && Array.isArray(data.data)) {
           fetchedReceipts = data.data.filter(r => (r.status || 'Active') !== 'Inactive');
-          setReceipts(fetchedReceipts);
         }
       }
 
-      const trustNames = new Set();
+      // Build User Lookups for active trusts
+      let usersList = [];
       if (usersRes.status === 'fulfilled') {
         const uData = await usersRes.value.json();
         if (uData.success && Array.isArray(uData.data)) {
-          uData.data.forEach(u => {
-            const name = u.trustName || u.name;
-            if (name) trustNames.add(name);
-          });
+          usersList = uData.data.filter(u => !u.isSuperAdmin && !/super/i.test(u.role || ''));
         }
       }
 
-      fetchedReceipts.forEach(r => {
-        if (r.trustName) trustNames.add(r.trustName);
+      const emailToTrust = new Map();
+      const idToTrust = new Map();
+      const distinctTrustNames = new Set();
+
+      usersList.forEach(u => {
+        const currentName = (u.trustName || u.name || '').trim();
+        if (currentName && currentName.toLowerCase() !== 'trust organization') {
+          distinctTrustNames.add(currentName);
+
+          if (u.email) {
+            emailToTrust.set(u.email.trim().toLowerCase(), currentName);
+          }
+          if (u.contactPersonEmail) {
+            emailToTrust.set(u.contactPersonEmail.trim().toLowerCase(), currentName);
+          }
+          if (u._id) {
+            idToTrust.set(String(u._id), currentName);
+          }
+          if (u.id) {
+            idToTrust.set(String(u.id), currentName);
+          }
+        }
       });
-      setTrustsList(Array.from(trustNames).sort((a, b) => a.localeCompare(b)));
+
+      // Normalize receipts so each receipt gets the current/latest trust name
+      const processedReceipts = fetchedReceipts.map(r => {
+        const rTrustId = (r.trustId || '').toString();
+        const rTrustEmail = (r.trustEmail || '').trim().toLowerCase();
+        const rCreatedBy = (r.createdBy || '').trim().toLowerCase();
+
+        let resolvedTrustName = '';
+        if (rTrustId && idToTrust.has(rTrustId)) {
+          resolvedTrustName = idToTrust.get(rTrustId);
+        } else if (rTrustEmail && emailToTrust.has(rTrustEmail)) {
+          resolvedTrustName = emailToTrust.get(rTrustEmail);
+        } else if (rCreatedBy && emailToTrust.has(rCreatedBy)) {
+          resolvedTrustName = emailToTrust.get(rCreatedBy);
+        } else if (r.trustName && r.trustName.trim()) {
+          resolvedTrustName = r.trustName.trim();
+        } else {
+          resolvedTrustName = 'Trust Organization';
+        }
+
+        // Only add orphan trust names if not already managed
+        if (resolvedTrustName && resolvedTrustName.toLowerCase() !== 'trust organization' && !distinctTrustNames.has(resolvedTrustName)) {
+          // If neither email nor id matched a registered user, keep it in distinctTrustNames
+          if (!emailToTrust.has(rTrustEmail) && !emailToTrust.has(rCreatedBy) && !idToTrust.has(rTrustId)) {
+            distinctTrustNames.add(resolvedTrustName);
+          }
+        }
+
+        return {
+          ...r,
+          currentTrustName: resolvedTrustName,
+          trustName: resolvedTrustName
+        };
+      });
+
+      setReceipts(processedReceipts);
+      setTrustsList(Array.from(distinctTrustNames).sort((a, b) => a.localeCompare(b)));
 
       // Collect heads & modes dynamically
       const headsSet = new Set(['General', 'Kind', 'Anna Chathiram', 'Food Drive', '365 Drive']);
       const modesSet = new Set(['Online / UPI', 'Bank Transfer', 'Cheque', 'NEFT / RTGS', 'Cash']);
-      fetchedReceipts.forEach(r => {
+      processedReceipts.forEach(r => {
         if (r.donationHead) headsSet.add(r.donationHead);
         if (r.paymentMode) modesSet.add(r.paymentMode);
       });
@@ -87,12 +140,13 @@ export default function AllReceiptsAdminPage() {
       (r.receiptNo && r.receiptNo.toLowerCase().includes(q)) ||
       (r.donorName && r.donorName.toLowerCase().includes(q)) ||
       (r.trustName && r.trustName.toLowerCase().includes(q)) ||
+      (r.currentTrustName && r.currentTrustName.toLowerCase().includes(q)) ||
       (r.phone && r.phone.includes(q)) ||
       (r.email && r.email.toLowerCase().includes(q));
 
     const trustMatch = trustFilter === 'All' ||
-      (r.trustName && r.trustName.toLowerCase() === trustFilter.toLowerCase()) ||
-      (r.trustEmail && r.trustEmail.toLowerCase() === trustFilter.toLowerCase());
+      (r.currentTrustName && r.currentTrustName.toLowerCase() === trustFilter.toLowerCase()) ||
+      (r.trustName && r.trustName.toLowerCase() === trustFilter.toLowerCase());
 
     const headMatch = headFilter === 'All' || (r.donationHead && r.donationHead.toLowerCase() === headFilter.toLowerCase());
     const modeMatch = modeFilter === 'All' || (r.paymentMode && r.paymentMode.toLowerCase() === modeFilter.toLowerCase());
@@ -224,6 +278,7 @@ export default function AllReceiptsAdminPage() {
           <table className="trust-data-table">
             <thead>
               <tr>
+                <th style={{ width: '60px' }}>S.No</th>
                 <th>Receipt No</th>
                 <th>Donor Name</th>
                 <th>Trust / Organization</th>
@@ -236,8 +291,11 @@ export default function AllReceiptsAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(r => (
-                <tr key={r._id}>
+              {filtered.map((r, idx) => (
+                <tr key={r._id || idx}>
+                  <td style={{ fontWeight: 600, color: '#475569', fontSize: '13px' }}>
+                    {idx + 1}
+                  </td>
                   <td>
                     <span style={{ fontWeight: 700, color: '#10b981', fontFamily: 'monospace' }}>
                       {r.receiptNo}

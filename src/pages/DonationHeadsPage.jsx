@@ -395,16 +395,16 @@ export default function DonationHeadsPage({ user }) {
             <thead>
               <tr>
                 <th style={{ width: '80px', cursor: 'pointer' }} onClick={() => handleSort('index')}>
-                  S.No <span className="sort-icon">▲▼</span>
+                  S.No
                 </th>
                 <th style={{ width: '40%', cursor: 'pointer' }} onClick={() => handleSort('name')}>
-                  Name <span className="sort-icon">▲▼</span>
+                  Name
                 </th>
                 <th style={{ width: '30%', cursor: 'pointer' }} onClick={() => handleSort('date')}>
-                  Created At <span className="sort-icon">▲▼</span>
+                  Created At
                 </th>
                 <th style={{ width: '20%' }}>
-                  Actions <span className="sort-icon">▲▼</span>
+                  Actions
                 </th>
               </tr>
             </thead>

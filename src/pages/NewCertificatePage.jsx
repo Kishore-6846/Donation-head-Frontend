@@ -1,10 +1,18 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import SimplePopup from '../components/SimplePopup';
 import { Sparkles, List, AlertCircle, Trash2 } from 'lucide-react';
 
 export default function NewCertificatePage({ user }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+
+  const editId = searchParams.get('id') || searchParams.get('_id');
+  const editRegNo = searchParams.get('regNo');
+  const passedCert = location.state?.cert;
+
+  const isEditMode = Boolean(editId || editRegNo || passedCert);
 
   const isDemoAdmin = !user?.email || user?.email === 'admin@donationreceipt.in';
   const storageKey = isDemoAdmin ? 'certificates_data' : `certificates_data_${user?.email}`;
@@ -15,6 +23,7 @@ export default function NewCertificatePage({ user }) {
     validUpto: ''
   });
 
+  const [existingCert, setExistingCert] = useState(passedCert || null);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +47,86 @@ export default function NewCertificatePage({ user }) {
     confirmText: 'OK',
     onConfirm: null
   });
+
+  // Prefill data if in edit mode
+  useEffect(() => {
+    if (passedCert) {
+      setExistingCert(passedCert);
+      setFormData({
+        regNo: passedCert.regNo || '',
+        validFrom: passedCert.validFrom || '',
+        validUpto: passedCert.validUpto || ''
+      });
+      if (passedCert.page1 && passedCert.page1 !== 'uploaded_page1') {
+        setPage1Preview(passedCert.page1);
+        setPage1FileName('Page-1 Photo');
+      }
+      if (passedCert.page2 && passedCert.page2 !== 'uploaded_page2') {
+        setPage2Preview(passedCert.page2);
+        setPage2FileName('Page-2 Photo');
+      }
+      return;
+    }
+
+    if (editId || editRegNo) {
+      // Check localStorage first
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const list = JSON.parse(saved);
+          const found = list.find(c =>
+            (editId && (String(c._id) === String(editId) || String(c.id) === String(editId))) ||
+            (editRegNo && String(c.regNo).toLowerCase() === String(editRegNo).toLowerCase())
+          );
+          if (found) {
+            setExistingCert(found);
+            setFormData({
+              regNo: found.regNo || '',
+              validFrom: found.validFrom || '',
+              validUpto: found.validUpto || ''
+            });
+            if (found.page1 && found.page1 !== 'uploaded_page1') {
+              setPage1Preview(found.page1);
+              setPage1FileName('Page-1 Photo');
+            }
+            if (found.page2 && found.page2 !== 'uploaded_page2') {
+              setPage2Preview(found.page2);
+              setPage2FileName('Page-2 Photo');
+            }
+          }
+        }
+      } catch (e) {}
+
+      // Also fetch from backend
+      const fetchSingleCert = async () => {
+        try {
+          const target = editId || editRegNo;
+          const res = await fetch(`/api/certificates/${encodeURIComponent(target)}`);
+          const resData = await res.json();
+          if (resData.success && resData.data) {
+            const cert = resData.data;
+            setExistingCert(cert);
+            setFormData({
+              regNo: cert.regNo || '',
+              validFrom: cert.validFrom || '',
+              validUpto: cert.validUpto || ''
+            });
+            if (cert.page1 && cert.page1 !== 'uploaded_page1') {
+              setPage1Preview(cert.page1);
+              setPage1FileName('Page-1 Photo');
+            }
+            if (cert.page2 && cert.page2 !== 'uploaded_page2') {
+              setPage2Preview(cert.page2);
+              setPage2FileName('Page-2 Photo');
+            }
+          }
+        } catch (err) {
+          console.warn('Error fetching certificate for edit:', err);
+        }
+      };
+      fetchSingleCert();
+    }
+  }, [editId, editRegNo, passedCert, storageKey]);
 
   const validateField = (name, value) => {
     let err = '';
@@ -150,76 +239,142 @@ export default function NewCertificatePage({ user }) {
 
     setSubmitting(true);
     try {
-      const page1Base64 = page1File ? (page1Preview || await readFileAsDataURL(page1File)) : '';
-      const page2Base64 = page2File ? (page2Preview || await readFileAsDataURL(page2File)) : '';
+      const page1Base64 = page1File ? (page1Preview || await readFileAsDataURL(page1File)) : (page1Preview || existingCert?.page1 || '');
+      const page2Base64 = page2File ? (page2Preview || await readFileAsDataURL(page2File)) : (page2Preview || existingCert?.page2 || '');
 
-      const newCert = {
-        id: Date.now(),
-        regNo: formData.regNo.trim(),
-        validFrom: formData.validFrom || '',
-        validUpto: formData.validUpto || '',
-        page1: page1Base64,
-        page2: page2Base64,
-        trustEmail: user?.email || '',
-        trustName: user?.trustName || user?.name || '',
-        createdBy: user?.email || 'admin'
-      };
+      if (isEditMode) {
+        const certId = editId || existingCert?._id || existingCert?.id || `cert_${Date.now()}`;
+        const updatedCert = {
+          ...existingCert,
+          _id: certId,
+          id: existingCert?.id || Date.now(),
+          regNo: formData.regNo.trim(),
+          validFrom: formData.validFrom || '',
+          validUpto: formData.validUpto || '',
+          page1: page1Base64,
+          page2: page2Base64,
+          trustEmail: existingCert?.trustEmail || user?.email || '',
+          trustName: existingCert?.trustName || user?.trustName || user?.name || '',
+          createdBy: existingCert?.createdBy || user?.email || 'admin'
+        };
 
-      try {
-        const response = await fetch('/api/certificates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newCert)
-        });
-        const resData = await response.json();
-        if (resData && resData.data && resData.data._id) {
-          newCert._id = resData.data._id;
-        }
-      } catch (err) {
-        console.warn('API save certificate error:', err);
-      }
-
-      // Safe localStorage save with quota protection
-      try {
-        const saved = localStorage.getItem(storageKey);
-        let list = [];
-        if (saved) {
-          try { list = JSON.parse(saved); } catch (err) { }
-        }
-        list.unshift(newCert);
         try {
-          localStorage.setItem(storageKey, JSON.stringify(list));
-        } catch (quotaErr) {
-          // If storage quota exceeded, store without heavy base64 strings in localStorage
-          const lightweightList = list.map(c => ({
-            ...c,
-            page1: c.page1 ? 'uploaded_page1' : '',
-            page2: c.page2 ? 'uploaded_page2' : ''
-          }));
-          localStorage.setItem(storageKey, JSON.stringify(lightweightList));
+          await fetch(`/api/certificates/${encodeURIComponent(certId)}?regNo=${encodeURIComponent(editRegNo || existingCert?.regNo || '')}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedCert)
+          });
+        } catch (err) {
+          console.warn('API update certificate error:', err);
         }
-      } catch (lsErr) {
-        console.warn('LocalStorage error:', lsErr);
-      }
 
-      setPopup({
-        isOpen: true,
-        type: 'success',
-        title: 'Certificate Added!',
-        message: '80G Certificate successfully added to your vault.',
-        confirmText: 'OK',
-        onConfirm: () => {
-          setPopup(p => ({ ...p, isOpen: false }));
-          navigate('/trust/all-certificate');
+        // Safe localStorage update
+        try {
+          const saved = localStorage.getItem(storageKey);
+          let list = saved ? JSON.parse(saved) : [];
+          const idx = list.findIndex(c =>
+            (certId && (String(c._id) === String(certId) || String(c.id) === String(certId))) ||
+            (editRegNo && String(c.regNo).toLowerCase() === String(editRegNo).toLowerCase()) ||
+            (existingCert?.regNo && String(c.regNo).toLowerCase() === String(existingCert.regNo).toLowerCase())
+          );
+          if (idx !== -1) {
+            list[idx] = updatedCert;
+          } else {
+            list.unshift(updatedCert);
+          }
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(list));
+          } catch (quotaErr) {
+            const lightweightList = list.map(c => ({
+              ...c,
+              page1: c.page1 ? 'uploaded_page1' : '',
+              page2: c.page2 ? 'uploaded_page2' : ''
+            }));
+            localStorage.setItem(storageKey, JSON.stringify(lightweightList));
+          }
+        } catch (lsErr) {
+          console.warn('LocalStorage error:', lsErr);
         }
-      });
+
+        setPopup({
+          isOpen: true,
+          type: 'success',
+          title: 'Certificate Updated!',
+          message: '80G Certificate successfully updated in your vault.',
+          confirmText: 'OK',
+          onConfirm: () => {
+            setPopup(p => ({ ...p, isOpen: false }));
+            navigate('/trust/all-certificate');
+          }
+        });
+      } else {
+        const newCert = {
+          id: Date.now(),
+          regNo: formData.regNo.trim(),
+          validFrom: formData.validFrom || '',
+          validUpto: formData.validUpto || '',
+          page1: page1Base64,
+          page2: page2Base64,
+          trustEmail: user?.email || '',
+          trustName: user?.trustName || user?.name || '',
+          createdBy: user?.email || 'admin'
+        };
+
+        try {
+          const response = await fetch('/api/certificates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newCert)
+          });
+          const resData = await response.json();
+          if (resData && resData.data && resData.data._id) {
+            newCert._id = resData.data._id;
+          }
+        } catch (err) {
+          console.warn('API save certificate error:', err);
+        }
+
+        // Safe localStorage save with quota protection
+        try {
+          const saved = localStorage.getItem(storageKey);
+          let list = [];
+          if (saved) {
+            try { list = JSON.parse(saved); } catch (err) { }
+          }
+          list.unshift(newCert);
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(list));
+          } catch (quotaErr) {
+            const lightweightList = list.map(c => ({
+              ...c,
+              page1: c.page1 ? 'uploaded_page1' : '',
+              page2: c.page2 ? 'uploaded_page2' : ''
+            }));
+            localStorage.setItem(storageKey, JSON.stringify(lightweightList));
+          }
+        } catch (lsErr) {
+          console.warn('LocalStorage error:', lsErr);
+        }
+
+        setPopup({
+          isOpen: true,
+          type: 'success',
+          title: 'Certificate Added!',
+          message: '80G Certificate successfully added to your vault.',
+          confirmText: 'OK',
+          onConfirm: () => {
+            setPopup(p => ({ ...p, isOpen: false }));
+            navigate('/trust/all-certificate');
+          }
+        });
+      }
     } catch (submitErr) {
       console.error('Error submitting certificate:', submitErr);
       setPopup({
         isOpen: true,
         type: 'error',
         title: 'Submission Error',
-        message: submitErr.message || 'An error occurred while adding the certificate.',
+        message: submitErr.message || 'An error occurred while saving the certificate.',
         confirmText: 'OK',
         onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
       });
@@ -255,9 +410,11 @@ export default function NewCertificatePage({ user }) {
             <Sparkles size={12} />
             <span>TAX EXEMPTION VAULT</span>
           </div>
-          <h1 className="mint-hero-title">Add 80G Certificate</h1>
+          <h1 className="mint-hero-title">{isEditMode ? 'Edit 80G Certificate' : 'Add 80G Certificate'}</h1>
           <p className="mint-hero-subtitle">
-            Register and upload official 80G tax exemption certificates to attach to donation receipts.
+            {isEditMode
+              ? 'Update and manage verified income tax department 80G approval certificate details.'
+              : 'Register and upload official 80G tax exemption certificates to attach to donation receipts.'}
           </p>
         </div>
 
@@ -558,7 +715,7 @@ export default function NewCertificatePage({ user }) {
                 }
               }}
             >
-              {submitting ? 'Submitting...' : 'Submit'}
+              {submitting ? (isEditMode ? 'Updating...' : 'Submitting...') : (isEditMode ? 'Update Certificate' : 'Submit')}
             </button>
           </div>
         </form>

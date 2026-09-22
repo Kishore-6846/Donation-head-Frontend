@@ -382,6 +382,7 @@ export default function EmployeesManagementPage() {
           <table className="trust-data-table">
             <thead>
               <tr>
+                <th style={{ width: '60px' }}>S.No</th>
                 <th>Emp ID</th>
                 <th>Employee Name</th>
                 <th>Contact Details</th>
@@ -393,8 +394,11 @@ export default function EmployeesManagementPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map(emp => (
-                <tr key={emp._id}>
+              {filteredEmployees.map((emp, idx) => (
+                <tr key={emp._id || idx}>
+                  <td style={{ fontWeight: 600, color: '#475569', fontSize: '13px' }}>
+                    {idx + 1}
+                  </td>
                   <td>
                     <span style={{ fontWeight: 700, color: '#10b981', fontFamily: 'monospace' }}>
                       {emp.empId}

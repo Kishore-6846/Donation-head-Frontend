@@ -567,120 +567,208 @@ export default function TrustDetailsViewPage() {
         </div>
       </div>
 
-      {/* Navigation Tabs Bar */}
-      <div className="trust-card" style={{ padding: '8px 12px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      {/* Navigation Tabs Bar - Model 4 Style */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, 1fr)',
+          gap: '12px',
+          marginBottom: '24px',
+          width: '100%'
+        }}
+      >
         <button
           type="button"
-          className={`btn-trust-secondary ${activeTab === 'overview' ? 'active' : ''}`}
           style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            border: activeTab === 'overview' ? '1px solid #008c44' : '1px solid #e2e8f0',
-            background: activeTab === 'overview' ? '#00a651' : '#ffffff',
-            color: activeTab === 'overview' ? '#ffffff' : '#475569',
-            fontWeight: activeTab === 'overview' ? 700 : 500,
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
+            padding: '10px 14px',
+            backgroundColor: activeTab === 'overview' ? '#f0fdf4' : '#ffffff',
+            border: activeTab === 'overview' ? '1.5px solid #10b981' : '1.5px solid #10b981',
+            borderRadius: '8px',
+            color: '#059669',
+            fontWeight: 600,
+            fontSize: '13.5px',
             cursor: 'pointer',
-            boxShadow: activeTab === 'overview' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            boxShadow: activeTab === 'overview' ? '0 2px 6px rgba(16, 185, 129, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.03)',
+            whiteSpace: 'nowrap'
           }}
           onClick={() => setActiveTab('overview')}
         >
-          <Building size={16} />
+          <div
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: '#ecfdf5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#10b981',
+              flexShrink: 0
+            }}
+          >
+            <Building size={14} />
+          </div>
           <span>Trust Profile &amp; Compliance</span>
         </button>
 
         <button
           type="button"
-          className={`btn-trust-secondary ${activeTab === 'receipts' ? 'active' : ''}`}
           style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            border: activeTab === 'receipts' ? '1px solid #008c44' : '1px solid #e2e8f0',
-            background: activeTab === 'receipts' ? '#00a651' : '#ffffff',
-            color: activeTab === 'receipts' ? '#ffffff' : '#475569',
-            fontWeight: activeTab === 'receipts' ? 700 : 500,
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
+            padding: '10px 14px',
+            backgroundColor: activeTab === 'receipts' ? '#f0fdf4' : '#ffffff',
+            border: activeTab === 'receipts' ? '1.5px solid #10b981' : '1.5px solid #10b981',
+            borderRadius: '8px',
+            color: '#059669',
+            fontWeight: 600,
+            fontSize: '13.5px',
             cursor: 'pointer',
-            boxShadow: activeTab === 'receipts' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            boxShadow: activeTab === 'receipts' ? '0 2px 6px rgba(16, 185, 129, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.03)',
+            whiteSpace: 'nowrap'
           }}
           onClick={() => setActiveTab('receipts')}
         >
-          <FileText size={16} />
+          <div
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: '#ecfdf5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#10b981',
+              flexShrink: 0
+            }}
+          >
+            <FileText size={14} />
+          </div>
           <span>Receipts ({stats.totalReceipts || 0})</span>
         </button>
 
         <button
           type="button"
-          className={`btn-trust-secondary ${activeTab === 'staff' ? 'active' : ''}`}
           style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            border: activeTab === 'staff' ? '1px solid #008c44' : '1px solid #e2e8f0',
-            background: activeTab === 'staff' ? '#00a651' : '#ffffff',
-            color: activeTab === 'staff' ? '#ffffff' : '#475569',
-            fontWeight: activeTab === 'staff' ? 700 : 500,
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
+            padding: '10px 14px',
+            backgroundColor: activeTab === 'staff' ? '#f0fdf4' : '#ffffff',
+            border: activeTab === 'staff' ? '1.5px solid #10b981' : '1.5px solid #10b981',
+            borderRadius: '8px',
+            color: '#059669',
+            fontWeight: 600,
+            fontSize: '13.5px',
             cursor: 'pointer',
-            boxShadow: activeTab === 'staff' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            boxShadow: activeTab === 'staff' ? '0 2px 6px rgba(16, 185, 129, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.03)',
+            whiteSpace: 'nowrap'
           }}
           onClick={() => setActiveTab('staff')}
         >
-          <Users size={16} />
+          <div
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: '#ecfdf5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#10b981',
+              flexShrink: 0
+            }}
+          >
+            <Users size={14} />
+          </div>
           <span>Members / Staff ({stats.totalStaff || 0})</span>
         </button>
 
         <button
           type="button"
-          className={`btn-trust-secondary ${activeTab === 'donors' ? 'active' : ''}`}
           style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            border: activeTab === 'donors' ? '1px solid #008c44' : '1px solid #e2e8f0',
-            background: activeTab === 'donors' ? '#00a651' : '#ffffff',
-            color: activeTab === 'donors' ? '#ffffff' : '#475569',
-            fontWeight: activeTab === 'donors' ? 700 : 500,
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
+            padding: '10px 14px',
+            backgroundColor: activeTab === 'donors' ? '#f0fdf4' : '#ffffff',
+            border: activeTab === 'donors' ? '1.5px solid #10b981' : '1.5px solid #10b981',
+            borderRadius: '8px',
+            color: '#059669',
+            fontWeight: 600,
+            fontSize: '13.5px',
             cursor: 'pointer',
-            boxShadow: activeTab === 'donors' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            boxShadow: activeTab === 'donors' ? '0 2px 6px rgba(16, 185, 129, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.03)',
+            whiteSpace: 'nowrap'
           }}
           onClick={() => setActiveTab('donors')}
         >
-          <HeartHandshake size={16} />
+          <div
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: '#ecfdf5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#10b981',
+              flexShrink: 0
+            }}
+          >
+            <HeartHandshake size={14} />
+          </div>
           <span>Donors ({stats.totalDonors || 0})</span>
         </button>
 
         <button
           type="button"
-          className={`btn-trust-secondary ${activeTab === 'heads' ? 'active' : ''}`}
           style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            border: activeTab === 'heads' ? '1px solid #008c44' : '1px solid #e2e8f0',
-            background: activeTab === 'heads' ? '#00a651' : '#ffffff',
-            color: activeTab === 'heads' ? '#ffffff' : '#475569',
-            fontWeight: activeTab === 'heads' ? 700 : 500,
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
+            padding: '10px 14px',
+            backgroundColor: activeTab === 'heads' ? '#f0fdf4' : '#ffffff',
+            border: activeTab === 'heads' ? '1.5px solid #10b981' : '1.5px solid #10b981',
+            borderRadius: '8px',
+            color: '#059669',
+            fontWeight: 600,
+            fontSize: '13.5px',
             cursor: 'pointer',
-            boxShadow: activeTab === 'heads' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            boxShadow: activeTab === 'heads' ? '0 2px 6px rgba(16, 185, 129, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.03)',
+            whiteSpace: 'nowrap'
           }}
           onClick={() => setActiveTab('heads')}
         >
-          <Layers size={16} />
+          <div
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: '#ecfdf5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#10b981',
+              flexShrink: 0
+            }}
+          >
+            <Layers size={14} />
+          </div>
           <span>Donation Heads</span>
         </button>
       </div>
@@ -1538,6 +1626,7 @@ export default function TrustDetailsViewPage() {
                 <table className="trust-data-table">
                   <thead>
                     <tr>
+                      <th style={{ width: '60px' }}>S.No</th>
                       <th>Donation Head Name</th>
                       <th>Total Receipts</th>
                       <th>Total Amount Collected (₹)</th>
@@ -1549,6 +1638,7 @@ export default function TrustDetailsViewPage() {
                       const share = stats.totalAmount > 0 ? ((hb.totalAmount / stats.totalAmount) * 100).toFixed(1) : 0;
                       return (
                         <tr key={i}>
+                          <td style={{ fontWeight: 600, color: '#475569', fontSize: '13px' }}>{i + 1}</td>
                           <td style={{ fontWeight: 600, color: '#0f172a' }}>{hb.head}</td>
                           <td style={{ fontWeight: 600, color: '#334155' }}>{hb.count}</td>
                           <td style={{ fontWeight: 700, color: '#10b981' }}>
