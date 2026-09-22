@@ -20,7 +20,8 @@ import {
   Eye,
   Globe,
   MapPin,
-  Calendar
+  Calendar,
+  ChevronDown
 } from 'lucide-react';
 
 export default function UsersManagementPage() {
@@ -30,6 +31,7 @@ export default function UsersManagementPage() {
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [openApprovalDropdown, setOpenApprovalDropdown] = useState(null);
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -77,6 +79,16 @@ export default function UsersManagementPage() {
     fetchUsers();
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.approval-dropdown-container')) {
+        setOpenApprovalDropdown(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   const handleOpenCreateModal = () => {
     setEditingUser(null);
     setFormData({
@@ -99,7 +111,7 @@ export default function UsersManagementPage() {
     setEditingUser(u);
     setFormData({
       trustName: u.trustName || u.name || '',
-      contactPerson: u.contactPerson || u.name || '',
+      contactPerson: u.contactPerson || '',
       email: u.email || '',
       mobile: u.mobile || '',
       password: '',
@@ -113,20 +125,13 @@ export default function UsersManagementPage() {
     setModalOpen(true);
   };
 
-  const handleSaveUser = async (e) => {
-    e.preventDefault();
-    if (!formData.trustName || !formData.email) {
-      setPopup({
-        isOpen: true,
-        type: 'error',
-        title: 'Required Fields Missing',
-        message: 'Trust Name and Email ID are mandatory.',
-        confirmText: 'OK',
-        onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
-      });
-      return;
-    }
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setEditingUser(null);
+  };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     try {
       const url = editingUser ? `/api/users/${editingUser._id}` : '/api/users';
       const method = editingUser ? 'PUT' : 'POST';
@@ -137,15 +142,16 @@ export default function UsersManagementPage() {
         body: JSON.stringify(formData)
       });
       const data = await res.json();
-
       if (data.success) {
-        setModalOpen(false);
+        handleCloseModal();
         fetchUsers();
         setPopup({
           isOpen: true,
           type: 'success',
-          title: editingUser ? 'User Updated' : 'User Created',
-          message: editingUser ? 'Trust details have been updated successfully.' : 'New Trust Admin account has been registered.',
+          title: editingUser ? 'Updated Successfully' : 'Created Successfully',
+          message: editingUser
+            ? 'Trust admin details updated successfully.'
+            : 'New trust organization created successfully with portal login access.',
           confirmText: 'OK',
           onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
         });
@@ -173,6 +179,7 @@ export default function UsersManagementPage() {
   };
 
   const handleApproveUser = async (u) => {
+    setOpenApprovalDropdown(null);
     setPopup({
       isOpen: true,
       type: 'success',
@@ -214,6 +221,18 @@ export default function UsersManagementPage() {
           console.error(e);
         }
       }
+    });
+  };
+
+  const handleRejectUser = (u) => {
+    setOpenApprovalDropdown(null);
+    setPopup({
+      isOpen: true,
+      type: 'info',
+      title: 'Reject Trust Account',
+      message: `Reject action for "${u.trustName || u.name}" will be configured soon.`,
+      confirmText: 'OK',
+      onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
     });
   };
 
@@ -469,64 +488,62 @@ export default function UsersManagementPage() {
           <table className="trust-data-table">
             <thead>
               <tr>
-                <th>Trust / Organization</th>
+                <th style={{ width: '50px', textAlign: 'center' }}>S.No</th>
+                <th>Trust</th>
                 <th>Contact Person</th>
-                <th>Email &amp; Mobile</th>
-                <th>Plan &amp; Payment</th>
-                <th>Reg / PAN No</th>
+                <th>Email</th>
+                <th>Mobile No</th>
+                <th>Plan</th>
+                <th>Reg No</th>
+                <th>PAN No</th>
                 <th style={{ textAlign: 'center' }}>Receipts</th>
                 <th style={{ textAlign: 'center' }}>Staff</th>
                 <th>Joined Date</th>
                 <th>Status</th>
+                <th style={{ textAlign: 'center' }}>Approval</th>
                 <th style={{ textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map(u => {
+              {filteredUsers.map((u, index) => {
                 const isPending = u.status === 'Pending' || u.status === 'Pending Approval';
                 return (
                   <tr key={u._id} style={{ backgroundColor: isPending ? '#fffdf7' : undefined }}>
+                    <td style={{ textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{index + 1}</td>
                     <td>
                       <div style={{ fontWeight: 600, color: '#0f172a' }}>{u.trustName || u.name}</div>
-                      <span style={{ fontSize: '11.5px', color: '#64748b' }}>ID: {u._id}</span>
                     </td>
                     <td style={{ color: '#334155' }}>{u.contactPerson || u.name || 'Admin'}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#0f172a' }}>
-                        <Mail size={13} style={{ color: '#64748b' }} />
+                        <Mail size={13} style={{ color: '#64748b', flexShrink: 0 }} />
                         <span>{u.email}</span>
                       </div>
-                      {u.mobile && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                          <Phone size={12} style={{ color: '#94a3b8' }} />
+                    </td>
+                    <td>
+                      {u.mobile ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#334155' }}>
+                          <Phone size={12} style={{ color: '#64748b', flexShrink: 0 }} />
                           <span>{u.mobile}</span>
                         </div>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '12px' }}>-</span>
                       )}
                     </td>
                     <td>
                       <span className="badge-pill badge-info" style={{ fontWeight: 600 }}>
                         {u.plan || 'Standard'}
                       </span>
-                      {u.paidAmount && (
-                        <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginTop: '3px' }}>
-                          ₹{Number(u.paidAmount).toLocaleString('en-IN')} Paid
-                        </div>
-                      )}
-                      {u.paymentId && (
-                        <div style={{ fontSize: '10.5px', color: '#64748b', fontFamily: 'monospace' }} title={`Payment ID: ${u.paymentId}`}>
-                          ID: {u.paymentId.slice(0, 10)}...
-                        </div>
-                      )}
                     </td>
                     <td>
-                      <div style={{ fontSize: '12px', color: '#334155' }}>
-                        <strong>Reg:</strong> {u.registrationNo || 'N/A'}
-                      </div>
-                      {u.panNo && (
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>
-                          <strong>PAN:</strong> {u.panNo}
-                        </div>
-                      )}
+                      <span style={{ fontSize: '12.5px', color: '#334155', fontWeight: 500 }}>
+                        {u.registrationNo || '-'}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '12.5px', color: '#334155', fontWeight: 500 }}>
+                        {u.panNo || '-'}
+                      </span>
                     </td>
                     <td style={{ fontWeight: 600, color: '#0f172a', textAlign: 'center' }}>{u.receiptsCount || 0}</td>
                     <td style={{ fontWeight: 600, color: '#10b981', textAlign: 'center' }}>{u.staffCount || 0}</td>
@@ -542,17 +559,17 @@ export default function UsersManagementPage() {
                         </span>
                       )}
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        {isPending && (
+                    <td style={{ textAlign: 'center' }}>
+                      {isPending ? (
+                        <div className="approval-dropdown-container" style={{ position: 'relative', display: 'inline-block' }}>
                           <button
                             type="button"
                             style={{
                               backgroundColor: '#059669',
                               color: '#ffffff',
                               border: '1px solid #047857',
-                              padding: '5px 12px',
-                              height: '32px',
+                              padding: '5px 10px',
+                              height: '30px',
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -567,21 +584,114 @@ export default function UsersManagementPage() {
                             }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.backgroundColor = '#047857';
-                              e.currentTarget.style.transform = 'translateY(-1px)';
-                              e.currentTarget.style.boxShadow = '0 3px 6px rgba(5, 150, 105, 0.35)';
                             }}
                             onMouseLeave={(e) => {
                               e.currentTarget.style.backgroundColor = '#059669';
-                              e.currentTarget.style.transform = 'none';
-                              e.currentTarget.style.boxShadow = '0 1px 3px rgba(5, 150, 105, 0.25)';
                             }}
-                            onClick={() => handleApproveUser(u)}
-                            title="Approve & Grant Admin Portal Access"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenApprovalDropdown(openApprovalDropdown === u._id ? null : u._id);
+                            }}
+                            title="Approval Options"
                           >
-                            <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
-                            <span>Approve</span>
+                            <CheckCircle2 size={13} style={{ flexShrink: 0 }} />
+                            <span>Approval</span>
+                            <ChevronDown
+                              size={12}
+                              style={{
+                                transform: openApprovalDropdown === u._id ? 'rotate(180deg)' : 'none',
+                                transition: 'transform 0.15s ease'
+                              }}
+                            />
                           </button>
-                        )}
+
+                          {openApprovalDropdown === u._id && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: '100%',
+                                right: 0,
+                                marginTop: '4px',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                                zIndex: 100,
+                                minWidth: '130px',
+                                padding: '4px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '2px',
+                                textAlign: 'left'
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  width: '100%',
+                                  padding: '7px 10px',
+                                  border: 'none',
+                                  background: 'none',
+                                  borderRadius: '5px',
+                                  fontSize: '12.5px',
+                                  fontWeight: 600,
+                                  color: '#059669',
+                                  cursor: 'pointer',
+                                  transition: 'background-color 0.15s ease',
+                                  textAlign: 'left'
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
+                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                onClick={() => {
+                                  setOpenApprovalDropdown(null);
+                                  handleApproveUser(u);
+                                }}
+                              >
+                                <CheckCircle2 size={14} style={{ color: '#059669' }} />
+                                <span>Approve</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  width: '100%',
+                                  padding: '7px 10px',
+                                  border: 'none',
+                                  background: 'none',
+                                  borderRadius: '5px',
+                                  fontSize: '12.5px',
+                                  fontWeight: 600,
+                                  color: '#dc2626',
+                                  cursor: 'pointer',
+                                  transition: 'background-color 0.15s ease',
+                                  textAlign: 'left'
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fef2f2')}
+                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                onClick={() => {
+                                  setOpenApprovalDropdown(null);
+                                  handleRejectUser(u);
+                                }}
+                              >
+                                <XCircle size={14} style={{ color: '#dc2626' }} />
+                                <span>Reject</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '13px', fontWeight: 600 }}>-</span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                         <button
                           type="button"
                           className="btn-table-action"

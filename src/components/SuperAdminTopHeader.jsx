@@ -50,8 +50,8 @@ export default function SuperAdminTopHeader({ user, onLogout, onToggleSidebar })
       .catch(() => {});
   }, []);
 
-  const adminName = user?.name || 'Super Administrator';
-  const roleTitle = 'Super Admin';
+  const adminName = 'Super Admin';
+  const roleTitle = 'Super Administrator';
 
   const handleProfileClick = () => {
     if (window.innerWidth <= 768) {

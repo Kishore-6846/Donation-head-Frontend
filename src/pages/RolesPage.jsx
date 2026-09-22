@@ -156,7 +156,8 @@ export default function RolesPage({ user: propUser }) {
         } catch (e) {}
       }
 
-      const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+      const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
+      const localRoles = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
       const roleMap = new Map();
       apiRoles.forEach(r => {
         if (r && r.roleName) roleMap.set(r.roleName.trim().toLowerCase(), r);
@@ -178,7 +179,8 @@ export default function RolesPage({ user: propUser }) {
       }
     } catch (e) {
       console.error('Error fetching roles and staff:', e);
-      const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+      const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
+      const localRoles = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
       if (localRoles.length > 0) {
         setRoles(localRoles);
       }
@@ -258,9 +260,10 @@ export default function RolesPage({ user: propUser }) {
     }
 
     try {
-      const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+      const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
+      const stored = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
       const updated = stored.filter(r => r._id !== roleId && r.roleName?.trim().toLowerCase() !== roleName.trim().toLowerCase());
-      localStorage.setItem('custom_roles', JSON.stringify(updated));
+      localStorage.setItem(roleStorageKey, JSON.stringify(updated));
     } catch (e) {
       console.error('Error updating localStorage:', e);
     }

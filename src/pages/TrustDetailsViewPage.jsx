@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
@@ -25,7 +25,9 @@ import {
   MapPin,
   Award,
   Layers,
-  HeartHandshake
+  HeartHandshake,
+  Filter,
+  RotateCcw
 } from 'lucide-react';
 
 export default function TrustDetailsViewPage() {
@@ -35,9 +37,27 @@ export default function TrustDetailsViewPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'receipts' | 'staff' | 'donors' | 'heads'
-  const [receiptSearch, setReceiptSearch] = useState('');
-  const [donorSearch, setDonorSearch] = useState('');
-  const [staffSearch, setStaffSearch] = useState('');
+  
+  // --- RECEIPTS TAB FILTERS ---
+  const [receiptSearchInput, setReceiptSearchInput] = useState('');
+  const [receiptHeadFilter, setReceiptHeadFilter] = useState('All');
+  const [receiptModeFilter, setReceiptModeFilter] = useState('All');
+  const [receiptsFilterApplied, setReceiptsFilterApplied] = useState(false);
+  const [activeReceiptFilters, setActiveReceiptFilters] = useState({ search: '', head: 'All', mode: 'All' });
+
+  // --- MEMBERS / STAFF TAB FILTERS ---
+  const [staffSearchInput, setStaffSearchInput] = useState('');
+  const [staffRoleFilter, setStaffRoleFilter] = useState('All');
+  const [staffFilterApplied, setStaffFilterApplied] = useState(false);
+  const [activeStaffFilters, setActiveStaffFilters] = useState({ search: '', role: 'All' });
+
+  // --- DONORS TAB FILTERS ---
+  const [donorSearchInput, setDonorSearchInput] = useState('');
+  const [donorHeadFilter, setDonorHeadFilter] = useState('All');
+  const [donorModeFilter, setDonorModeFilter] = useState('All');
+  const [donorsFilterApplied, setDonorsFilterApplied] = useState(false);
+  const [activeDonorFilters, setActiveDonorFilters] = useState({ search: '', head: 'All', mode: 'All' });
+
   const [popup, setPopup] = useState({
     isOpen: false,
     type: 'success',
@@ -128,6 +148,192 @@ export default function TrustDetailsViewPage() {
     }
   }, [id]);
 
+  const receipts = data?.receipts || [];
+  const staff = data?.staff || [];
+  const donors = data?.donors || [];
+  const headsBreakdown = data?.headsBreakdown || [];
+  const modesBreakdown = data?.modesBreakdown || [];
+  const user = data?.user || null;
+  const stats = data?.stats || {};
+  const plan = data?.plan || {};
+
+  // Unique Donation Heads and Payment Modes for Receipts Tab
+  const availableReceiptHeads = useMemo(() => {
+    const heads = new Set();
+    receipts.forEach(r => {
+      if (r.donationHead && r.donationHead.trim()) heads.add(r.donationHead.trim());
+    });
+    return Array.from(heads);
+  }, [receipts]);
+
+  const availableReceiptModes = useMemo(() => {
+    const modes = new Set();
+    receipts.forEach(r => {
+      if (r.paymentMode && r.paymentMode.trim()) modes.add(r.paymentMode.trim());
+    });
+    return Array.from(modes);
+  }, [receipts]);
+
+  const handleApplyReceiptFilter = () => {
+    setActiveReceiptFilters({
+      search: receiptSearchInput,
+      head: receiptHeadFilter,
+      mode: receiptModeFilter
+    });
+    setReceiptsFilterApplied(true);
+  };
+
+  const handleResetReceiptFilter = () => {
+    setReceiptSearchInput('');
+    setReceiptHeadFilter('All');
+    setReceiptModeFilter('All');
+    setActiveReceiptFilters({ search: '', head: 'All', mode: 'All' });
+    setReceiptsFilterApplied(false);
+  };
+
+  // Filter receipts - only populated once user clicks Filter
+  const filteredReceipts = useMemo(() => {
+    if (!receiptsFilterApplied) return [];
+    return receipts.filter(r => {
+      const q = (activeReceiptFilters.search || '').trim().toLowerCase();
+      const searchMatch = !q || (
+        (r.receiptNo && r.receiptNo.toLowerCase().includes(q)) ||
+        (r.donorName && r.donorName.toLowerCase().includes(q)) ||
+        (r.donationHead && r.donationHead.toLowerCase().includes(q)) ||
+        (r.paymentMode && r.paymentMode.toLowerCase().includes(q)) ||
+        (r.phone && r.phone.includes(q))
+      );
+
+      const headMatch = activeReceiptFilters.head === 'All' ||
+        (r.donationHead && r.donationHead.trim().toLowerCase() === activeReceiptFilters.head.trim().toLowerCase());
+
+      const modeMatch = activeReceiptFilters.mode === 'All' ||
+        (r.paymentMode && r.paymentMode.trim().toLowerCase() === activeReceiptFilters.mode.trim().toLowerCase());
+
+      return Boolean(searchMatch && headMatch && modeMatch);
+    });
+  }, [receipts, receiptsFilterApplied, activeReceiptFilters]);
+
+  // Unique Roles for Staff Tab
+  const availableStaffRoles = useMemo(() => {
+    const roles = new Set();
+    staff.forEach(s => {
+      if (s.role && s.role.trim()) roles.add(s.role.trim());
+    });
+    return Array.from(roles);
+  }, [staff]);
+
+  const handleApplyStaffFilter = () => {
+    setActiveStaffFilters({
+      search: staffSearchInput,
+      role: staffRoleFilter
+    });
+    setStaffFilterApplied(true);
+  };
+
+  const handleResetStaffFilter = () => {
+    setStaffSearchInput('');
+    setStaffRoleFilter('All');
+    setActiveStaffFilters({ search: '', role: 'All' });
+    setStaffFilterApplied(false);
+  };
+
+  // Filter staff - only populated once user clicks Filter
+  const filteredStaff = useMemo(() => {
+    if (!staffFilterApplied) return [];
+    return staff.filter(s => {
+      const q = (activeStaffFilters.search || '').trim().toLowerCase();
+      const searchMatch = !q || (
+        (s.name && s.name.toLowerCase().includes(q)) ||
+        (s.email && s.email.toLowerCase().includes(q)) ||
+        (s.role && s.role.toLowerCase().includes(q)) ||
+        (s.phone && s.phone.includes(q))
+      );
+      const roleMatch = activeStaffFilters.role === 'All' ||
+        (s.role && s.role.trim().toLowerCase() === activeStaffFilters.role.trim().toLowerCase());
+      return Boolean(searchMatch && roleMatch);
+    });
+  }, [staff, staffFilterApplied, activeStaffFilters]);
+
+  // Unique Heads and Modes for Donors Tab
+  const availableDonorHeads = useMemo(() => {
+    const heads = new Set();
+    donors.forEach(d => {
+      if (d.donationHead && d.donationHead.trim()) heads.add(d.donationHead.trim());
+      if (Array.isArray(d.donationHeads)) {
+        d.donationHeads.forEach(h => { if (h && h.trim()) heads.add(h.trim()); });
+      }
+    });
+    receipts.forEach(r => {
+      if (r.donationHead && r.donationHead.trim()) heads.add(r.donationHead.trim());
+    });
+    return Array.from(heads);
+  }, [donors, receipts]);
+
+  const availableDonorModes = useMemo(() => {
+    const modes = new Set();
+    donors.forEach(d => {
+      if (d.paymentMode && d.paymentMode.trim()) modes.add(d.paymentMode.trim());
+      if (Array.isArray(d.paymentModes)) {
+        d.paymentModes.forEach(m => { if (m && m.trim()) modes.add(m.trim()); });
+      }
+    });
+    receipts.forEach(r => {
+      if (r.paymentMode && r.paymentMode.trim()) modes.add(r.paymentMode.trim());
+    });
+    return Array.from(modes);
+  }, [donors, receipts]);
+
+  const handleApplyDonorFilter = () => {
+    setActiveDonorFilters({
+      search: donorSearchInput,
+      head: donorHeadFilter,
+      mode: donorModeFilter
+    });
+    setDonorsFilterApplied(true);
+  };
+
+  const handleResetDonorFilter = () => {
+    setDonorSearchInput('');
+    setDonorHeadFilter('All');
+    setDonorModeFilter('All');
+    setActiveDonorFilters({ search: '', head: 'All', mode: 'All' });
+    setDonorsFilterApplied(false);
+  };
+
+  // Filter donors - only populated once user clicks Filter
+  const filteredDonors = useMemo(() => {
+    if (!donorsFilterApplied) return [];
+    return donors.filter(d => {
+      const q = (activeDonorFilters.search || '').trim().toLowerCase();
+      const searchMatch = !q || (
+        (d.name && d.name.toLowerCase().includes(q)) ||
+        (d.phone && d.phone.includes(q)) ||
+        (d.email && d.email.toLowerCase().includes(q)) ||
+        (d.panNo && d.panNo.toLowerCase().includes(q)) ||
+        (d.donationHead && d.donationHead.toLowerCase().includes(q)) ||
+        (d.paymentMode && d.paymentMode.toLowerCase().includes(q))
+      );
+
+      const headMatch = activeDonorFilters.head === 'All' ||
+        (d.donationHead && d.donationHead.toLowerCase().includes(activeDonorFilters.head.trim().toLowerCase())) ||
+        (Array.isArray(d.donationHeads) && d.donationHeads.some(h => h.trim().toLowerCase() === activeDonorFilters.head.trim().toLowerCase()));
+
+      const modeMatch = activeDonorFilters.mode === 'All' ||
+        (d.paymentMode && d.paymentMode.toLowerCase().includes(activeDonorFilters.mode.trim().toLowerCase())) ||
+        (Array.isArray(d.paymentModes) && d.paymentModes.some(m => m.trim().toLowerCase() === activeDonorFilters.mode.trim().toLowerCase()));
+
+      return Boolean(searchMatch && headMatch && modeMatch);
+    });
+  }, [donors, donorsFilterApplied, activeDonorFilters]);
+
+  const handlePrintReceipt = (r) => {
+    const url = r.receiptNo
+      ? `/api/receipts/pdf?receiptNo=${encodeURIComponent(r.receiptNo)}`
+      : `/api/receipts/pdf?id=${encodeURIComponent(r._id)}`;
+    window.open(url, '_blank');
+  };
+
   if (loading) {
     return (
       <div className="dashboard-container-modern" style={{ textAlign: 'center', padding: '100px 0', color: '#64748b' }}>
@@ -155,52 +361,6 @@ export default function TrustDetailsViewPage() {
       </div>
     );
   }
-
-  const { user, stats, receipts = [], staff = [], donors = [], headsBreakdown = [], modesBreakdown = [], plan } = data;
-
-  // Filter receipts
-  const filteredReceipts = receipts.filter(r => {
-    const q = receiptSearch.toLowerCase();
-    if (!q) return true;
-    return (
-      (r.receiptNo && r.receiptNo.toLowerCase().includes(q)) ||
-      (r.donorName && r.donorName.toLowerCase().includes(q)) ||
-      (r.donationHead && r.donationHead.toLowerCase().includes(q)) ||
-      (r.paymentMode && r.paymentMode.toLowerCase().includes(q)) ||
-      (r.phone && r.phone.includes(q))
-    );
-  });
-
-  // Filter staff
-  const filteredStaff = staff.filter(s => {
-    const q = staffSearch.toLowerCase();
-    if (!q) return true;
-    return (
-      (s.name && s.name.toLowerCase().includes(q)) ||
-      (s.email && s.email.toLowerCase().includes(q)) ||
-      (s.role && s.role.toLowerCase().includes(q)) ||
-      (s.phone && s.phone.includes(q))
-    );
-  });
-
-  // Filter donors
-  const filteredDonors = donors.filter(d => {
-    const q = donorSearch.toLowerCase();
-    if (!q) return true;
-    return (
-      (d.name && d.name.toLowerCase().includes(q)) ||
-      (d.phone && d.phone.includes(q)) ||
-      (d.email && d.email.toLowerCase().includes(q)) ||
-      (d.panNo && d.panNo.toLowerCase().includes(q))
-    );
-  });
-
-  const handlePrintReceipt = (r) => {
-    const url = r.receiptNo
-      ? `/api/receipts/pdf?receiptNo=${encodeURIComponent(r.receiptNo)}`
-      : `/api/receipts/pdf?id=${encodeURIComponent(r._id)}`;
-    window.open(url, '_blank');
-  };
 
   const trustName = user.trustName || user.name || 'Trust Organization';
 
@@ -408,20 +568,23 @@ export default function TrustDetailsViewPage() {
       </div>
 
       {/* Navigation Tabs Bar */}
-      <div className="trust-card" style={{ padding: '8px 12px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto' }}>
+      <div className="trust-card" style={{ padding: '8px 12px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <button
           type="button"
           className={`btn-trust-secondary ${activeTab === 'overview' ? 'active' : ''}`}
           style={{
             padding: '10px 18px',
             borderRadius: '8px',
-            border: activeTab === 'overview' ? '1px solid #10b981' : '1px solid transparent',
-            background: activeTab === 'overview' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-            color: activeTab === 'overview' ? '#059669' : '#475569',
+            border: activeTab === 'overview' ? '1px solid #008c44' : '1px solid #e2e8f0',
+            background: activeTab === 'overview' ? '#00a651' : '#ffffff',
+            color: activeTab === 'overview' ? '#ffffff' : '#475569',
             fontWeight: activeTab === 'overview' ? 700 : 500,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            cursor: 'pointer',
+            boxShadow: activeTab === 'overview' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
+            transition: 'all 0.15s ease'
           }}
           onClick={() => setActiveTab('overview')}
         >
@@ -435,13 +598,16 @@ export default function TrustDetailsViewPage() {
           style={{
             padding: '10px 18px',
             borderRadius: '8px',
-            border: activeTab === 'receipts' ? '1px solid #10b981' : '1px solid transparent',
-            background: activeTab === 'receipts' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-            color: activeTab === 'receipts' ? '#059669' : '#475569',
+            border: activeTab === 'receipts' ? '1px solid #008c44' : '1px solid #e2e8f0',
+            background: activeTab === 'receipts' ? '#00a651' : '#ffffff',
+            color: activeTab === 'receipts' ? '#ffffff' : '#475569',
             fontWeight: activeTab === 'receipts' ? 700 : 500,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            cursor: 'pointer',
+            boxShadow: activeTab === 'receipts' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
+            transition: 'all 0.15s ease'
           }}
           onClick={() => setActiveTab('receipts')}
         >
@@ -455,13 +621,16 @@ export default function TrustDetailsViewPage() {
           style={{
             padding: '10px 18px',
             borderRadius: '8px',
-            border: activeTab === 'staff' ? '1px solid #10b981' : '1px solid transparent',
-            background: activeTab === 'staff' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-            color: activeTab === 'staff' ? '#059669' : '#475569',
+            border: activeTab === 'staff' ? '1px solid #008c44' : '1px solid #e2e8f0',
+            background: activeTab === 'staff' ? '#00a651' : '#ffffff',
+            color: activeTab === 'staff' ? '#ffffff' : '#475569',
             fontWeight: activeTab === 'staff' ? 700 : 500,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            cursor: 'pointer',
+            boxShadow: activeTab === 'staff' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
+            transition: 'all 0.15s ease'
           }}
           onClick={() => setActiveTab('staff')}
         >
@@ -475,13 +644,16 @@ export default function TrustDetailsViewPage() {
           style={{
             padding: '10px 18px',
             borderRadius: '8px',
-            border: activeTab === 'donors' ? '1px solid #10b981' : '1px solid transparent',
-            background: activeTab === 'donors' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-            color: activeTab === 'donors' ? '#059669' : '#475569',
+            border: activeTab === 'donors' ? '1px solid #008c44' : '1px solid #e2e8f0',
+            background: activeTab === 'donors' ? '#00a651' : '#ffffff',
+            color: activeTab === 'donors' ? '#ffffff' : '#475569',
             fontWeight: activeTab === 'donors' ? 700 : 500,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            cursor: 'pointer',
+            boxShadow: activeTab === 'donors' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
+            transition: 'all 0.15s ease'
           }}
           onClick={() => setActiveTab('donors')}
         >
@@ -495,13 +667,16 @@ export default function TrustDetailsViewPage() {
           style={{
             padding: '10px 18px',
             borderRadius: '8px',
-            border: activeTab === 'heads' ? '1px solid #10b981' : '1px solid transparent',
-            background: activeTab === 'heads' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-            color: activeTab === 'heads' ? '#059669' : '#475569',
+            border: activeTab === 'heads' ? '1px solid #008c44' : '1px solid #e2e8f0',
+            background: activeTab === 'heads' ? '#00a651' : '#ffffff',
+            color: activeTab === 'heads' ? '#ffffff' : '#475569',
             fontWeight: activeTab === 'heads' ? 700 : 500,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            cursor: 'pointer',
+            boxShadow: activeTab === 'heads' ? '0 2px 6px rgba(0, 166, 81, 0.3)' : 'none',
+            transition: 'all 0.15s ease'
           }}
           onClick={() => setActiveTab('heads')}
         >
@@ -596,13 +771,9 @@ export default function TrustDetailsViewPage() {
                 <span style={{ color: '#64748b' }}>FCRA Registration No:</span>
                 <span style={{ fontWeight: 600, color: '#0f172a' }}>{user.fcraNo || 'N/A'}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#64748b' }}>Subscription Plan:</span>
                 <span className="badge-pill badge-info" style={{ fontWeight: 600 }}>{user.plan || 'Standard'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748b' }}>Account Role &amp; ID:</span>
-                <span style={{ color: '#64748b', fontSize: '13px' }}>{user.role || 'Admin'} ({user._id})</span>
               </div>
             </div>
           </div>
@@ -662,36 +833,192 @@ export default function TrustDetailsViewPage() {
       {/* TAB 2: RECEIPTS */}
       {activeTab === 'receipts' && (
         <div>
-          <div className="trust-card" style={{ padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-            <div className="trust-search-wrapper" style={{ flex: '1 1 280px', maxWidth: '400px' }}>
-              <Search size={16} className="trust-search-icon" />
-              <input
-                type="text"
-                placeholder="Search receipts by donor, head, mode..."
-                className="trust-input trust-search-input"
-                style={{ width: '100%' }}
-                value={receiptSearch}
-                onChange={(e) => setReceiptSearch(e.target.value)}
-              />
+          <div
+            className="trust-card"
+            style={{
+              padding: '16px 20px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
+              {/* Search Input */}
+              <div className="trust-search-wrapper" style={{ flex: '1 1 200px', minWidth: '180px', maxWidth: '300px' }}>
+                <Search size={16} className="trust-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search receipts by donor, head, mode..."
+                  className="trust-input trust-search-input"
+                  style={{ width: '100%' }}
+                  value={receiptSearchInput}
+                  onChange={(e) => setReceiptSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleApplyReceiptFilter();
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Donation Head Dropdown */}
+              <select
+                className="trust-select"
+                style={{ width: '170px', height: '38px', fontSize: '13px' }}
+                value={receiptHeadFilter}
+                onChange={(e) => setReceiptHeadFilter(e.target.value)}
+                title="Filter by Donation Head"
+              >
+                <option value="All">All Donation Heads</option>
+                {availableReceiptHeads.map(h => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+
+              {/* Payment Mode Dropdown */}
+              <select
+                className="trust-select"
+                style={{ width: '170px', height: '38px', fontSize: '13px' }}
+                value={receiptModeFilter}
+                onChange={(e) => setReceiptModeFilter(e.target.value)}
+                title="Filter by Payment Mode"
+              >
+                <option value="All">All Payment Modes</option>
+                {availableReceiptModes.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+
+              {/* Filter Button */}
+              <button
+                type="button"
+                onClick={handleApplyReceiptFilter}
+                style={{
+                  backgroundColor: '#00a651',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '7px 18px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 5px rgba(0, 166, 81, 0.25)',
+                  transition: 'background-color 0.15s ease'
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#008c44')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#00a651')}
+                title="Apply filters to view receipts"
+              >
+                <Filter size={14} />
+                <span>Filter</span>
+              </button>
+
+              {/* Reset Button */}
+              <button
+                type="button"
+                onClick={handleResetReceiptFilter}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  padding: '7px 16px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e2e8f0';
+                  e.currentTarget.style.color = '#1e293b';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f1f5f9';
+                  e.currentTarget.style.color = '#475569';
+                }}
+                title="Reset filters and clear table"
+              >
+                <RotateCcw size={13} />
+                <span>Reset</span>
+              </button>
             </div>
-            <div style={{ fontSize: '14px', color: '#475569' }}>
-              Showing <strong>{filteredReceipts.length}</strong> of <strong>{receipts.length}</strong> receipts
-            </div>
+
+            {receiptsFilterApplied && (
+              <div style={{ fontSize: '13.5px', color: '#475569' }}>
+                Showing <strong>{filteredReceipts.length}</strong> matching receipt{filteredReceipts.length !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
 
-          {filteredReceipts.length === 0 ? (
+          {!receiptsFilterApplied ? (
+            <div className="trust-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <Filter size={48} style={{ color: '#94a3b8', margin: '0 auto 16px auto', opacity: 0.8 }} />
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>Filter Donation Receipts</h3>
+              <p style={{ color: '#64748b', fontSize: '14px', maxWidth: '460px', margin: '0 auto 18px auto' }}>
+                Select search criteria, donation head, or payment mode above and click <strong>"Filter"</strong> to display the receipt records.
+              </p>
+              <button
+                type="button"
+                onClick={handleApplyReceiptFilter}
+                style={{
+                  backgroundColor: '#00a651',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '8px 20px',
+                  borderRadius: '6px',
+                  fontSize: '13.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(0, 166, 81, 0.3)'
+                }}
+              >
+                <Filter size={15} />
+                <span>Apply Filter &amp; View All Receipts</span>
+              </button>
+            </div>
+          ) : filteredReceipts.length === 0 ? (
             <div className="trust-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
               <FileText size={48} style={{ color: '#94a3b8', margin: '0 auto 16px auto' }} />
               <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>No Receipts Found</h3>
-              <p style={{ color: '#64748b', fontSize: '14px' }}>
-                {receipts.length === 0 ? 'This trust has not generated any receipts yet.' : 'No receipts match your search filter.'}
+              <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
+                No receipts matched your search and filter criteria.
               </p>
+              <button
+                type="button"
+                onClick={handleResetReceiptFilter}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Reset Filter
+              </button>
             </div>
           ) : (
             <div className="trust-table-wrapper trust-card">
               <table className="trust-data-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '50px', textAlign: 'center' }}>S.No</th>
                     <th>Receipt No</th>
                     <th>Donor Name</th>
                     <th>Donation Head</th>
@@ -703,8 +1030,9 @@ export default function TrustDetailsViewPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredReceipts.map(r => (
-                    <tr key={r._id}>
+                  {filteredReceipts.map((r, index) => (
+                    <tr key={r._id || index}>
+                      <td style={{ textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{index + 1}</td>
                       <td>
                         <span style={{ fontWeight: 700, color: '#10b981', fontFamily: 'monospace' }}>
                           {r.receiptNo}
@@ -749,36 +1077,178 @@ export default function TrustDetailsViewPage() {
       {/* TAB 3: STAFF / MEMBERS */}
       {activeTab === 'staff' && (
         <div>
-          <div className="trust-card" style={{ padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-            <div className="trust-search-wrapper" style={{ flex: '1 1 280px', maxWidth: '400px' }}>
-              <Search size={16} className="trust-search-icon" />
-              <input
-                type="text"
-                placeholder="Search staff members by name, email, role..."
-                className="trust-input trust-search-input"
-                style={{ width: '100%' }}
-                value={staffSearch}
-                onChange={(e) => setStaffSearch(e.target.value)}
-              />
+          <div
+            className="trust-card"
+            style={{
+              padding: '16px 20px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
+              {/* Search Input */}
+              <div className="trust-search-wrapper" style={{ flex: '1 1 200px', minWidth: '180px', maxWidth: '300px' }}>
+                <Search size={16} className="trust-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search staff by name, email, phone..."
+                  className="trust-input trust-search-input"
+                  style={{ width: '100%' }}
+                  value={staffSearchInput}
+                  onChange={(e) => setStaffSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleApplyStaffFilter();
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Assigned Role Dropdown */}
+              <select
+                className="trust-select"
+                style={{ width: '180px', height: '38px', fontSize: '13px' }}
+                value={staffRoleFilter}
+                onChange={(e) => setStaffRoleFilter(e.target.value)}
+                title="Filter by Assigned Role"
+              >
+                <option value="All">All Assigned Roles</option>
+                {availableStaffRoles.map(role => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+
+              {/* Filter Button */}
+              <button
+                type="button"
+                onClick={handleApplyStaffFilter}
+                style={{
+                  backgroundColor: '#00a651',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '7px 18px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 5px rgba(0, 166, 81, 0.25)',
+                  transition: 'background-color 0.15s ease'
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#008c44')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#00a651')}
+                title="Apply filter to view staff members"
+              >
+                <Filter size={14} />
+                <span>Filter</span>
+              </button>
+
+              {/* Reset Button */}
+              <button
+                type="button"
+                onClick={handleResetStaffFilter}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  padding: '7px 16px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e2e8f0';
+                  e.currentTarget.style.color = '#1e293b';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f1f5f9';
+                  e.currentTarget.style.color = '#475569';
+                }}
+                title="Reset filters and clear table"
+              >
+                <RotateCcw size={13} />
+                <span>Reset</span>
+              </button>
             </div>
-            <div style={{ fontSize: '14px', color: '#475569' }}>
-              <strong>{filteredStaff.length}</strong> Registered Staff Members
-            </div>
+
+            {staffFilterApplied && (
+              <div style={{ fontSize: '13.5px', color: '#475569' }}>
+                Showing <strong>{filteredStaff.length}</strong> matching staff member{filteredStaff.length !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
 
-          {filteredStaff.length === 0 ? (
+          {!staffFilterApplied ? (
+            <div className="trust-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <Filter size={48} style={{ color: '#94a3b8', margin: '0 auto 16px auto', opacity: 0.8 }} />
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>Filter Members &amp; Staff</h3>
+              <p style={{ color: '#64748b', fontSize: '14px', maxWidth: '460px', margin: '0 auto 18px auto' }}>
+                Select search criteria or assigned role above and click <strong>"Filter"</strong> to display staff records.
+              </p>
+              <button
+                type="button"
+                onClick={handleApplyStaffFilter}
+                style={{
+                  backgroundColor: '#00a651',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '8px 20px',
+                  borderRadius: '6px',
+                  fontSize: '13.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(0, 166, 81, 0.3)'
+                }}
+              >
+                <Filter size={15} />
+                <span>Apply Filter &amp; View All Staff</span>
+              </button>
+            </div>
+          ) : filteredStaff.length === 0 ? (
             <div className="trust-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
               <Users size={48} style={{ color: '#94a3b8', margin: '0 auto 16px auto' }} />
               <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>No Staff Members Found</h3>
-              <p style={{ color: '#64748b', fontSize: '14px' }}>
-                {staff.length === 0 ? 'No team members or staff users are registered under this trust yet.' : 'No staff members match your search filter.'}
+              <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
+                No staff members match your search and filter criteria.
               </p>
+              <button
+                type="button"
+                onClick={handleResetStaffFilter}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Reset Filter
+              </button>
             </div>
           ) : (
-            <div className="trust-table-wrapper trust-card">
-              <table className="trust-data-table">
+            <div className="trust-table-wrapper trust-card" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table className="trust-data-table" style={{ width: '100%' }}>
                 <thead>
                   <tr>
+                    <th style={{ width: '50px', textAlign: 'center' }}>S.No</th>
                     <th>Member Name</th>
                     <th>Email Address</th>
                     <th>Phone</th>
@@ -788,8 +1258,9 @@ export default function TrustDetailsViewPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStaff.map(s => (
-                    <tr key={s._id}>
+                  {filteredStaff.map((s, index) => (
+                    <tr key={s._id || index}>
+                      <td style={{ textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{index + 1}</td>
                       <td style={{ fontWeight: 600, color: '#0f172a' }}>{s.name}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#334155' }}>
@@ -821,40 +1292,198 @@ export default function TrustDetailsViewPage() {
       {/* TAB 4: DONORS */}
       {activeTab === 'donors' && (
         <div>
-          <div className="trust-card" style={{ padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-            <div className="trust-search-wrapper" style={{ flex: '1 1 280px', maxWidth: '400px' }}>
-              <Search size={16} className="trust-search-icon" />
-              <input
-                type="text"
-                placeholder="Search donors by name, phone, PAN..."
-                className="trust-input trust-search-input"
-                style={{ width: '100%' }}
-                value={donorSearch}
-                onChange={(e) => setDonorSearch(e.target.value)}
-              />
+          <div
+            className="trust-card"
+            style={{
+              padding: '16px 20px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
+              {/* Search Input */}
+              <div className="trust-search-wrapper" style={{ flex: '1 1 200px', minWidth: '180px', maxWidth: '300px' }}>
+                <Search size={16} className="trust-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search donors by name, phone, PAN..."
+                  className="trust-input trust-search-input"
+                  style={{ width: '100%' }}
+                  value={donorSearchInput}
+                  onChange={(e) => setDonorSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleApplyDonorFilter();
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Donation Head Dropdown */}
+              <select
+                className="trust-select"
+                style={{ width: '170px', height: '38px', fontSize: '13px' }}
+                value={donorHeadFilter}
+                onChange={(e) => setDonorHeadFilter(e.target.value)}
+                title="Filter by Donation Head"
+              >
+                <option value="All">All Donation Heads</option>
+                {availableDonorHeads.map(h => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+
+              {/* Payment Mode Dropdown */}
+              <select
+                className="trust-select"
+                style={{ width: '170px', height: '38px', fontSize: '13px' }}
+                value={donorModeFilter}
+                onChange={(e) => setDonorModeFilter(e.target.value)}
+                title="Filter by Payment Mode"
+              >
+                <option value="All">All Payment Modes</option>
+                {availableDonorModes.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+
+              {/* Filter Button */}
+              <button
+                type="button"
+                onClick={handleApplyDonorFilter}
+                style={{
+                  backgroundColor: '#00a651',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '7px 18px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 5px rgba(0, 166, 81, 0.25)',
+                  transition: 'background-color 0.15s ease'
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#008c44')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#00a651')}
+                title="Apply filter to view donors"
+              >
+                <Filter size={14} />
+                <span>Filter</span>
+              </button>
+
+              {/* Reset Button */}
+              <button
+                type="button"
+                onClick={handleResetDonorFilter}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  padding: '7px 16px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e2e8f0';
+                  e.currentTarget.style.color = '#1e293b';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f1f5f9';
+                  e.currentTarget.style.color = '#475569';
+                }}
+                title="Reset filters and clear table"
+              >
+                <RotateCcw size={13} />
+                <span>Reset</span>
+              </button>
             </div>
-            <div style={{ fontSize: '14px', color: '#475569' }}>
-              <strong>{filteredDonors.length}</strong> Unique Donors
-            </div>
+
+            {donorsFilterApplied && (
+              <div style={{ fontSize: '13.5px', color: '#475569' }}>
+                Showing <strong>{filteredDonors.length}</strong> matching donor{filteredDonors.length !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
 
-          {filteredDonors.length === 0 ? (
+          {!donorsFilterApplied ? (
+            <div className="trust-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <Filter size={48} style={{ color: '#94a3b8', margin: '0 auto 16px auto', opacity: 0.8 }} />
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>Filter Donors Records</h3>
+              <p style={{ color: '#64748b', fontSize: '14px', maxWidth: '460px', margin: '0 auto 18px auto' }}>
+                Select search criteria, donation head, or payment mode above and click <strong>"Filter"</strong> to display donor records.
+              </p>
+              <button
+                type="button"
+                onClick={handleApplyDonorFilter}
+                style={{
+                  backgroundColor: '#00a651',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '8px 20px',
+                  borderRadius: '6px',
+                  fontSize: '13.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(0, 166, 81, 0.3)'
+                }}
+              >
+                <Filter size={15} />
+                <span>Apply Filter &amp; View All Donors</span>
+              </button>
+            </div>
+          ) : filteredDonors.length === 0 ? (
             <div className="trust-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
               <HeartHandshake size={48} style={{ color: '#94a3b8', margin: '0 auto 16px auto' }} />
               <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>No Donors Found</h3>
-              <p style={{ color: '#64748b', fontSize: '14px' }}>
-                {donors.length === 0 ? 'No donor transactions recorded for this trust yet.' : 'No donors match your search filter.'}
+              <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
+                No donors match your search and filter criteria.
               </p>
+              <button
+                type="button"
+                onClick={handleResetDonorFilter}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Reset Filter
+              </button>
             </div>
           ) : (
-            <div className="trust-table-wrapper trust-card">
-              <table className="trust-data-table">
+            <div className="trust-table-wrapper trust-card" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table className="trust-data-table" style={{ minWidth: '1050px', width: '100%' }}>
                 <thead>
                   <tr>
+                    <th style={{ width: '50px', textAlign: 'center' }}>S.No</th>
                     <th>Donor Name</th>
                     <th>Phone</th>
                     <th>Email Address</th>
                     <th>PAN Card</th>
+                    <th>Donation Head</th>
+                    <th>Payment Mode</th>
                     <th>Total Donated (₹)</th>
                     <th>Donations Count</th>
                     <th>Last Donation</th>
@@ -863,6 +1492,7 @@ export default function TrustDetailsViewPage() {
                 <tbody>
                   {filteredDonors.map((d, idx) => (
                     <tr key={idx}>
+                      <td style={{ textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{idx + 1}</td>
                       <td style={{ fontWeight: 600, color: '#0f172a' }}>{d.name}</td>
                       <td style={{ fontSize: '13px', color: '#334155' }}>{d.phone || 'N/A'}</td>
                       <td style={{ fontSize: '13px', color: '#64748b' }}>{d.email || 'N/A'}</td>
@@ -873,10 +1503,14 @@ export default function TrustDetailsViewPage() {
                           <span style={{ color: '#94a3b8' }}>N/A</span>
                         )}
                       </td>
-                      <td style={{ fontWeight: 700, color: '#10b981' }}>
-                        ₹{d.totalDonated.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      <td>
+                        <span className="badge-pill badge-info">{d.donationHead || 'General'}</span>
                       </td>
-                      <td style={{ fontWeight: 600, color: '#0f172a' }}>{d.donationsCount}</td>
+                      <td style={{ fontSize: '13px', color: '#475569' }}>{d.paymentMode || 'Online / UPI'}</td>
+                      <td style={{ fontWeight: 700, color: '#10b981' }}>
+                        ₹{Number(d.totalDonated).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ fontWeight: 600, color: '#0f172a', textAlign: 'center' }}>{d.donationsCount}</td>
                       <td style={{ fontSize: '13px', color: '#64748b' }}>{d.lastDonationDate || 'N/A'}</td>
                     </tr>
                   ))}

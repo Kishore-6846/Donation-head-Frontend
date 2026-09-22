@@ -112,6 +112,7 @@ export default function AddRolePage() {
 
   useEffect(() => {
     // Fetch existing roles for duplicate check
+    const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
     const queryParam = trustEmail ? `?trustEmail=${encodeURIComponent(trustEmail)}` : '';
     fetch(`/api/roles${queryParam}`)
       .then(r => r.json())
@@ -122,7 +123,7 @@ export default function AddRolePage() {
       })
       .catch(() => {
         try {
-          const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+          const stored = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
           setExistingRoles(stored);
         } catch (e) {}
       });
@@ -131,7 +132,7 @@ export default function AddRolePage() {
       setPageLoading(true);
       // First check local storage
       try {
-        const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+        const stored = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
         const found = stored.find(r => r._id === editId || r.roleName === editId);
         if (found) {
           setRoleName(found.roleName || '');
@@ -229,14 +230,15 @@ export default function AddRolePage() {
         const data = await res.json();
         if (res.ok && data.success) {
           try {
-            const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+            const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
+            const stored = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
             const updated = stored.map(r => {
               if (r._id === editId || r.roleName === editId) {
                 return { ...r, roleName: cleanRoleName, permissions };
               }
               return r;
             });
-            localStorage.setItem('custom_roles', JSON.stringify(updated));
+            localStorage.setItem(roleStorageKey, JSON.stringify(updated));
           } catch (err) {}
 
           setToastMessage('Role updated successfully!');
@@ -281,9 +283,10 @@ export default function AddRolePage() {
         };
 
         try {
-          const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+          const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
+          const stored = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
           const updated = [newRoleObj, ...stored.filter(r => r.roleName?.trim().toLowerCase() !== cleanRoleName.toLowerCase())];
-          localStorage.setItem('custom_roles', JSON.stringify(updated));
+          localStorage.setItem(roleStorageKey, JSON.stringify(updated));
         } catch (err) {}
 
         setToastMessage('Role added successfully!');

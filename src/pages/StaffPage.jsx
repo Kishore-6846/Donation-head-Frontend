@@ -159,9 +159,10 @@ export default function StaffPage({ user: propUser }) {
         } catch (e) {}
       }
 
-      // Merge with localStorage custom_roles
+      // Merge with localStorage custom_roles (scoped to this trust)
+      const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
       try {
-        const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+        const localRoles = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
         localRoles.forEach(r => {
           if (r?.roleName && !apiRoles.some(ar => ar.trim().toLowerCase() === r.roleName.trim().toLowerCase())) {
             apiRoles.push(r.roleName);
@@ -223,7 +224,8 @@ export default function StaffPage({ user: propUser }) {
     } catch (e) {
       console.error('Error fetching staff:', e);
       try {
-        const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+        const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
+        const localRoles = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
         const extracted = localRoles.map(r => r?.roleName).filter(Boolean);
         if (extracted.length > 0) setRolesList(extracted);
       } catch (err) {}
@@ -259,7 +261,8 @@ export default function StaffPage({ user: propUser }) {
     // Refresh role list from state and local storage immediately
     let currentRoles = [...rolesList];
     try {
-      const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+      const roleStorageKey = trustEmail ? `custom_roles_${trustEmail.toLowerCase()}` : 'custom_roles';
+      const localRoles = JSON.parse(localStorage.getItem(roleStorageKey) || '[]');
       localRoles.forEach(r => {
         if (r?.roleName && !currentRoles.some(cr => cr.trim().toLowerCase() === r.roleName.trim().toLowerCase())) {
           currentRoles.push(r.roleName);
