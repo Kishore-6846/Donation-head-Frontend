@@ -4,51 +4,28 @@ import { X, CheckCircle2, RefreshCw, ShieldCheck, Users, TrendingUp, Heart, Phon
 
 const DEFAULT_PLANS = [
   {
-    name: 'Starter Plan',
+    name: 'Basic Plan',
     sub: 'Entry-level for newly registered trusts',
-    price: '1,999',
+    price: '1,200',
     features: [
       '1 Admin Account',
-      '500 Donation Receipts per year',
+      '1 Staff User Account Included',
+      'Unlimited Donation Receipts',
       'Instant PDF Receipt Generation',
-      'Head-Wise & Donor Reports',
-      'Standard Email Support'
+      'Standard Email & WhatsApp Support'
     ]
   },
   {
     name: 'Standard Plan',
     sub: 'Ideal for growing NGOs & Trusts',
-    price: '4,000',
+    price: '2,500',
     features: [
       '1 Admin Account',
-      '4 Staff User Accounts Included',
+      '2 Staff User Accounts Included',
       'Unlimited Donation Receipts',
       'WhatsApp Receipt Sharing',
-      'Form No. 10BD Compliance Reports'
-    ]
-  },
-  {
-    name: 'Advanced Plan',
-    sub: 'Designed for expanding organizations',
-    price: '7,000',
-    features: [
-      '1 Admin Account',
-      '9 Staff User Accounts Included',
-      'Bulk Receipt PDF Downloader (ZIP)',
-      'Custom Trust Logo & Signature',
-      'Priority Phone & WhatsApp Support'
-    ]
-  },
-  {
-    name: 'Enterprise Plan',
-    sub: 'Best for large NGOs & Trusts',
-    price: '10,000',
-    features: [
-      '1 Admin Account',
-      'Unlimited Staff User Accounts',
-      'Dedicated Account Manager',
-      'Multi-Branch Vault',
-      '24/7 VIP Priority Hotline'
+      'Form No. 10BD Compliance Reports',
+      '80G Tax Exemption Certificates'
     ]
   }
 ];
@@ -153,12 +130,12 @@ export default function UpgradePlanModal({ isOpen, onClose }) {
             </p>
           </div>
 
-          {/* 4 Pricing Cards Grid */}
+          {/* Pricing Cards Grid */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '14px',
+              gridTemplateColumns: `repeat(${Math.min(plans.length || 2, 4)}, 1fr)`,
+              gap: '16px',
               marginBottom: '20px'
             }}
           >

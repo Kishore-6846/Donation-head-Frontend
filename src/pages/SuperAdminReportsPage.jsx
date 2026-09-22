@@ -166,16 +166,10 @@ export default function SuperAdminReportsPage() {
 
   const getPlanBadgeStyle = (planName) => {
     const p = (planName || '').toLowerCase();
-    if (p.includes('enterprise')) {
-      return { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' };
-    }
-    if (p.includes('advanced')) {
-      return { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' };
-    }
-    if (p.includes('starter')) {
+    if (p.includes('basic') || p.includes('starter')) {
       return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' };
     }
-    return { bg: '#f8fafc', color: '#334155', border: '#cbd5e1' }; // Standard
+    return { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' }; // Standard
   };
 
   return (
@@ -342,10 +336,8 @@ export default function SuperAdminReportsPage() {
                   style={{ fontSize: '13px', height: '36px', borderRadius: '6px', width: '130px' }}
                 >
                   <option value="All">All Plans</option>
+                  <option value="Basic">Basic</option>
                   <option value="Standard">Standard</option>
-                  <option value="Advanced">Advanced</option>
-                  <option value="Enterprise">Enterprise</option>
-                  <option value="Starter">Starter</option>
                 </select>
 
                 {/* Status Filter */}

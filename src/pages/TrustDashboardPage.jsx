@@ -101,9 +101,41 @@ export default function TrustDashboardPage({ user }) {
     return () => window.removeEventListener('open-cart-modal', handleOpenCart);
   }, []);
 
+  const getScopedProfile = () => {
+    const activeEmail = (effectiveUser?.email || '').toLowerCase().trim();
+    if (!activeEmail) return {};
+    try {
+      return JSON.parse(localStorage.getItem(`profile_data_${activeEmail}`) || '{}');
+    } catch (e) {
+      return {};
+    }
+  };
+
   const [adminProfile, setAdminProfile] = useState(() => {
-    return effectiveUser || {};
+    const scoped = getScopedProfile();
+    return { ...(effectiveUser || {}), ...scoped };
   });
+
+  useEffect(() => {
+    const syncProfile = (e) => {
+      const activeEmail = (e?.detail?.email || effectiveUser?.email || '').toLowerCase().trim();
+      let cached = {};
+      if (activeEmail) {
+        try {
+          cached = JSON.parse(localStorage.getItem(`profile_data_${activeEmail}`) || '{}');
+        } catch (err) {}
+      }
+      const updated = e?.detail || getTrustSession()?.user || effectiveUser || {};
+      setAdminProfile(prev => ({ ...prev, ...updated, ...cached }));
+    };
+
+    window.addEventListener('trust-session-change', syncProfile);
+    window.addEventListener('storage', syncProfile);
+    return () => {
+      window.removeEventListener('trust-session-change', syncProfile);
+      window.removeEventListener('storage', syncProfile);
+    };
+  }, [effectiveUser]);
 
   useEffect(() => {
     const activeEmail = (effectiveUser?.email || '').trim();
@@ -266,20 +298,24 @@ export default function TrustDashboardPage({ user }) {
     }
   };
 
+  const scopedProfile = getScopedProfile();
   const effectiveTrustName =
     (adminProfile.trustName && adminProfile.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? adminProfile.trustName : '') ||
+    scopedProfile.trustName ||
     (adminProfile.name && !isSuperUser(adminProfile) ? adminProfile.name : '') ||
+    scopedProfile.name ||
+    (effectiveUser?.trustName && effectiveUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? effectiveUser.trustName : '') ||
     'Trust Organization';
 
-  const effectiveEmail = (!isSuperUser(adminProfile) ? adminProfile.email : '') || 'admin@trust.org';
-  const effectiveMobile = adminProfile.mobile || adminProfile.phone || '';
-  const effectiveRegNo = adminProfile.registrationNo || '';
-  const effective80G = adminProfile.section80GRegNo || adminProfile.reg12ANo || '';
-  const effectiveContactPerson = adminProfile.contactPerson || (adminProfile.name && !isSuperUser(adminProfile) ? adminProfile.name : '');
-  const effectiveStatus = adminProfile.status || 'Active';
-  const effectivePlan = adminProfile.plan || 'Standard';
-  const effectiveJoined = adminProfile.joinedDate || 'Recently';
-  const effectiveLogo = adminProfile.logo || '';
+  const effectiveEmail = (!isSuperUser(adminProfile) ? adminProfile.email : '') || scopedProfile.email || effectiveUser?.email || 'admin@trust.org';
+  const effectiveMobile = adminProfile.mobile || adminProfile.phone || scopedProfile.mobile || scopedProfile.phone || effectiveUser?.mobile || effectiveUser?.phone || '';
+  const effectiveRegNo = adminProfile.registrationNo || scopedProfile.registrationNo || effectiveUser?.registrationNo || '';
+  const effective80G = adminProfile.section80GRegNo || adminProfile.reg12ANo || scopedProfile.section80GRegNo || scopedProfile.reg12ANo || effectiveUser?.section80GRegNo || effectiveUser?.reg12ANo || '';
+  const effectiveContactPerson = adminProfile.contactPerson || scopedProfile.contactPerson || (adminProfile.name && !isSuperUser(adminProfile) ? adminProfile.name : '') || (effectiveUser?.name && !isSuperUser(effectiveUser) ? effectiveUser.name : '');
+  const effectiveStatus = adminProfile.status || scopedProfile.status || effectiveUser?.status || 'Active';
+  const effectivePlan = adminProfile.plan || scopedProfile.plan || effectiveUser?.plan || 'Standard';
+  const effectiveJoined = adminProfile.joinedDate || scopedProfile.joinedDate || effectiveUser?.joinedDate || 'Recently';
+  const effectiveLogo = adminProfile.logo || scopedProfile.logo || effectiveUser?.logo || '';
 
   return (
     <>

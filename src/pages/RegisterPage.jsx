@@ -134,10 +134,8 @@ export default function RegisterPage({ onLoginSuccess }) {
       return Number(selected.price);
     }
     const nameLower = (formData.plan || '').toLowerCase();
-    if (nameLower.includes('enterprise')) return 10000;
-    if (nameLower.includes('advanced')) return 7000;
-    if (nameLower.includes('starter')) return 1999;
-    return 4000; // Standard default
+    if (nameLower.includes('basic') || nameLower.includes('starter')) return 1200;
+    return 2500; // Standard default
   };
 
   const planBasePrice = getSelectedPlanPrice();
@@ -877,9 +875,8 @@ export default function RegisterPage({ onLoginSuccess }) {
                             ))
                           ) : (
                             <>
-                              <option value="Standard">⭐ Standard Plan — ₹4,000/Annual (4 Staff Users)</option>
-                              <option value="Advanced">⭐ Advanced Plan — ₹7,000/Annual (9 Staff Users)</option>
-                              <option value="Enterprise">⭐ Enterprise Plan — ₹10,000/Annual (20 Staff Users)</option>
+                              <option value="Basic">⭐ Basic Plan — ₹1,200/Annual (1 Staff User)</option>
+                              <option value="Standard">⭐ Standard Plan — ₹2,500/Annual (2 Staff Users)</option>
                             </>
                           )}
                         </select>

@@ -389,15 +389,18 @@ export default function NewUserPage() {
                   onChange={handleChange}
                   style={inputStyle}
                 >
-                  <option value="Free Starter">Free Starter (₹0)</option>
-                  <option value="Standard">Standard (Annual)</option>
-                  <option value="Premium Pro">Premium Pro (Annual)</option>
-                  <option value="Enterprise">Enterprise Tier</option>
-                  {plansList.map(p => (
-                    <option key={p._id} value={p.name}>
-                      {p.name} (₹{p.price}/{p.billingCycle || 'yr'})
-                    </option>
-                  ))}
+                  {plansList && plansList.length > 0 ? (
+                    plansList.map(p => (
+                      <option key={p._id || p.code || p.name} value={p.name}>
+                        {p.name} (₹{Number(p.price || 0).toLocaleString('en-IN')}/{p.billingCycle || 'yr'})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Basic">Basic (₹1,200/yr)</option>
+                      <option value="Standard">Standard (₹2,500/yr)</option>
+                    </>
+                  )}
                 </select>
               </div>
 

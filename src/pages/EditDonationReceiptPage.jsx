@@ -176,16 +176,25 @@ export default function EditDonationReceiptPage({ user }) {
     })();
     const uEmail = (activeUser?.email || '').toLowerCase().trim();
     const tName = activeUser?.trustName || (activeUser?.name && !activeUser.name.toLowerCase().includes('super') ? activeUser.name : '');
-    const headsQuery = tName
-      ? `?limit=100&trustName=${encodeURIComponent(tName)}&trustEmail=${encodeURIComponent(uEmail)}`
-      : '?limit=100';
+    const isSuperAdmin =
+      Boolean(user?.isSuperAdmin) ||
+      (user?.role && user.role.toLowerCase().includes('super')) ||
+      location.pathname.toLowerCase().startsWith('/superadmin');
+
+    const headsQuery = isSuperAdmin
+      ? '?limit=100&isSuperAdmin=true'
+      : (uEmail
+          ? `?limit=100&trustName=${encodeURIComponent(tName)}&trustEmail=${encodeURIComponent(uEmail)}`
+          : (tName ? `?limit=100&trustName=${encodeURIComponent(tName)}` : '?limit=100'));
+
+    const headsStorageKey = isSuperAdmin ? 'custom_donation_heads_superadmin' : `custom_donation_heads_${uEmail || 'trust'}`;
 
     fetch(`/api/donation-heads${headsQuery}`)
       .then(res => res.json())
       .then(data => {
         let custom = [];
         try {
-          custom = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+          custom = JSON.parse(localStorage.getItem(headsStorageKey) || '[]');
         } catch (e) {}
 
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
@@ -198,7 +207,7 @@ export default function EditDonationReceiptPage({ user }) {
         console.error(err);
         let custom = [];
         try {
-          custom = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+          custom = JSON.parse(localStorage.getItem(headsStorageKey) || '[]');
         } catch (e) {}
         setHeads(deduplicateHeads([...custom, ...DEFAULT_HEADS]));
       });

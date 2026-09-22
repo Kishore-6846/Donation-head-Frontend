@@ -420,10 +420,8 @@ export default function UsersManagementPage() {
             onChange={(e) => setPlanFilter(e.target.value)}
           >
             <option value="All">All Plans</option>
+            <option value="Basic">Basic</option>
             <option value="Standard">Standard</option>
-            <option value="Advanced">Advanced</option>
-            <option value="Enterprise">Enterprise</option>
-            <option value="Starter">Starter</option>
           </select>
           <select
             className="trust-select"

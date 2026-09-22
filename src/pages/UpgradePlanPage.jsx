@@ -23,28 +23,20 @@ export default function UpgradePlanPage({ user }) {
 
   const DEFAULT_PLANS = [
     {
+      id: 'basic',
+      code: 'basic',
+      name: 'Basic',
+      price: 1200,
+      adminUsers: 1,
+      staffUsers: '1 Staff User'
+    },
+    {
       id: 'standard',
       code: 'standard',
       name: 'Standard',
-      price: 4000,
+      price: 2500,
       adminUsers: 1,
-      staffUsers: '4 Staff Users'
-    },
-    {
-      id: 'advanced',
-      code: 'advanced',
-      name: 'Advanced',
-      price: 7000,
-      adminUsers: 1,
-      staffUsers: '9 Staff Users'
-    },
-    {
-      id: 'enterprise',
-      code: 'enterprise',
-      name: 'Enterprise',
-      price: 10000,
-      adminUsers: 1,
-      staffUsers: 'Unlimited Staff'
+      staffUsers: '2 Staff Users'
     }
   ];
 
@@ -57,10 +49,8 @@ export default function UpgradePlanPage({ user }) {
   const [plans, setPlans] = useState(DEFAULT_PLANS);
   const [selectedPlanId, setSelectedPlanId] = useState(() => {
     const pLower = currentPlanName.toLowerCase();
-    if (pLower.includes('standard')) return 'advanced';
-    if (pLower.includes('advanced')) return 'enterprise';
-    if (pLower.includes('starter')) return 'standard';
-    return 'enterprise';
+    if (pLower.includes('basic') || pLower.includes('starter')) return 'standard';
+    return 'standard';
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -101,9 +91,9 @@ export default function UpgradePlanPage({ user }) {
             id: p.code || p._id,
             code: p.code || p._id,
             name: p.name,
-            price: Number(p.price) || 4000,
+            price: Number(p.price) || 2500,
             adminUsers: 1,
-            staffUsers: p.staffUserLimit || '4 Staff Users'
+            staffUsers: p.staffUserLimit || '2 Staff Users'
           }));
           setPlans(mapped);
 
@@ -111,9 +101,7 @@ export default function UpgradePlanPage({ user }) {
           const currLower = currentPlanName.toLowerCase();
           const nextPlan = mapped.find(p => {
             const pCode = (p.code || p.id || p.name).toLowerCase();
-            if (currLower.includes('standard')) return pCode.includes('advanced') || pCode.includes('enterprise');
-            if (currLower.includes('advanced')) return pCode.includes('enterprise');
-            if (currLower.includes('starter')) return pCode.includes('standard');
+            if (currLower.includes('basic') || currLower.includes('starter')) return pCode.includes('standard');
             return false;
           });
 
@@ -171,10 +159,11 @@ export default function UpgradePlanPage({ user }) {
 
   const getCurrentPlanUsers = (planName) => {
     const pl = (planName || '').toLowerCase();
-    if (pl.includes('enterprise')) return 'Unlimited Staff';
+    if (pl.includes('basic') || pl.includes('starter')) return '1 Staff User';
+    if (pl.includes('standard')) return '2 Staff Users';
     if (pl.includes('advanced')) return '9 Staff Users';
-    if (pl.includes('starter')) return '1 Staff User';
-    return '4 Staff Users';
+    if (pl.includes('enterprise')) return 'Unlimited Staff';
+    return '2 Staff Users';
   };
 
   // Math Calculations:

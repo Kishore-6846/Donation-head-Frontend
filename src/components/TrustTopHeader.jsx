@@ -58,8 +58,37 @@ export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
   }, []);
 
 
-  const trustSession = getTrustSession();
-  const activeUser = (!isSuperUser(user) && user) || trustSession?.user || {};
+  const [sessionUser, setSessionUser] = useState(() => {
+    const s = getTrustSession()?.user;
+    return (!isSuperUser(user) && user) || (s && !isSuperUser(s) ? s : {}) || {};
+  });
+
+  useEffect(() => {
+    const handleSessionChange = (e) => {
+      if (e?.detail && !isSuperUser(e.detail)) {
+        setSessionUser(e.detail);
+      } else {
+        const s = getTrustSession()?.user;
+        if (s && !isSuperUser(s)) {
+          setSessionUser(s);
+        }
+      }
+    };
+    window.addEventListener('trust-session-change', handleSessionChange);
+    window.addEventListener('storage', handleSessionChange);
+    return () => {
+      window.removeEventListener('trust-session-change', handleSessionChange);
+      window.removeEventListener('storage', handleSessionChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user && !isSuperUser(user)) {
+      setSessionUser(user);
+    }
+  }, [user]);
+
+  const activeUser = sessionUser?._id || sessionUser?.email ? sessionUser : ((!isSuperUser(user) && user) || getTrustSession()?.user || {});
 
   const userEmail = (!isSuperUser(activeUser) ? (activeUser?.email || '') : '').toLowerCase().trim();
   const userScopedProfile = (() => {
@@ -73,15 +102,20 @@ export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
 
   const trustDisplayName =
     (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') ||
+    userScopedProfile.trustName ||
     userScopedProfile.name ||
     (activeUser?.name && !isSuperUser(activeUser) ? activeUser.name : '') ||
     'Trust Organization';
-  const roleName =
+
+  const signatoryDisplayName =
+    activeUser?.signatoryName ||
+    userScopedProfile.signatoryName ||
     activeUser?.contactPerson ||
     userScopedProfile.contactPerson ||
     (activeUser?.name && !isSuperUser(activeUser) ? activeUser.name : '') ||
-    'Administrator';
-  const userLogo = activeUser?.logo || userScopedProfile.logo;
+    'Authorized Signatory';
+
+  const userLogo = activeUser?.logo || userScopedProfile.logo || '';
 
   const handleProfileClick = () => {
     if (window.innerWidth <= 768) {
@@ -192,12 +226,12 @@ export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
               {userLogo ? (
                 <img src={userLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               ) : (
-                <span>{roleName.charAt(0).toUpperCase()}</span>
+                <span>{signatoryDisplayName.charAt(0).toUpperCase()}</span>
               )}
             </div>
             <div className="user-meta-wrap">
               <span className="user-welcome-label">Welcome</span>
-              <span className="user-name-label">{roleName}</span>
+              <span className="user-name-label">{signatoryDisplayName}</span>
             </div>
             <ChevronDown size={15} className={`chevron-transition ${userMenuOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -206,7 +240,7 @@ export default function TrustTopHeader({ user, onLogout, onToggleSidebar }) {
             <div className="top-header-dropdown user-dropdown" style={{ textAlign: 'left' }}>
               <div className="user-dropdown-header" style={{ textAlign: 'left' }}>
                 <p className="dropdown-user-name" style={{ textAlign: 'left' }}>{trustDisplayName}</p>
-                <p className="dropdown-user-role" style={{ textAlign: 'left' }}>{roleName} Account</p>
+                <p className="dropdown-user-role" style={{ textAlign: 'left' }}>{signatoryDisplayName}</p>
               </div>
               <div className="user-dropdown-links" style={{ textAlign: 'left' }}>
                 <button

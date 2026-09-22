@@ -122,6 +122,21 @@ export default function DonationHeadsPage({ user }) {
   const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin');
   const activeUser = (!isSuperAdmin && !isSuperUser(user) && user) || getCurrentUser(location.pathname) || {};
   const activeTrustName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || (!isSuperUser(activeUser) ? activeUser?.name : '') || '';
+  const activeEmail = (activeUser?.email || '').trim().toLowerCase();
+
+  const storageKey = isSuperAdmin
+    ? 'custom_donation_heads_superadmin'
+    : `custom_donation_heads_${activeEmail || 'trust'}`;
+
+  const getInitialHeads = () => {
+    try {
+      const custom = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const safeCustom = Array.isArray(custom) ? custom : [];
+      return deduplicateHeadsList([...safeCustom, ...DEFAULT_HEADS]);
+    } catch (e) {
+      return DEFAULT_HEADS;
+    }
+  };
 
   const [heads, setHeads] = useState(getInitialHeads);
   const [loading, setLoading] = useState(false);
@@ -146,15 +161,16 @@ export default function DonationHeadsPage({ user }) {
     try {
       let custom = [];
       try {
-        const stored = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+        const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
         custom = Array.isArray(stored) ? stored : [];
       } catch (e) {}
 
       let url = `/api/donation-heads?search=${encodeURIComponent(searchTerm || '')}&limit=100`;
       if (isSuperAdmin) {
         url += '&isSuperAdmin=true';
-      } else if (activeTrustName) {
-        url += `&trustName=${encodeURIComponent(activeTrustName)}&trustEmail=${encodeURIComponent(activeUser?.email || '')}`;
+      } else {
+        if (activeTrustName) url += `&trustName=${encodeURIComponent(activeTrustName)}`;
+        if (activeEmail) url += `&trustEmail=${encodeURIComponent(activeEmail)}`;
       }
 
       const res = await fetch(url);
@@ -171,7 +187,7 @@ export default function DonationHeadsPage({ user }) {
             const cBase = String(c.rawName || c.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
             return cBase && !backendBases.has(cBase);
           });
-          localStorage.setItem('custom_donation_heads', JSON.stringify(cleanedCustom));
+          localStorage.setItem(storageKey, JSON.stringify(cleanedCustom));
         } catch (e) {}
 
         const merged = deduplicateHeadsList([...data.data, ...custom]);
@@ -184,7 +200,7 @@ export default function DonationHeadsPage({ user }) {
       console.error(e);
       let custom = [];
       try {
-        const stored = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+        const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
         custom = Array.isArray(stored) ? stored : [];
       } catch (err) {}
       setHeads(deduplicateHeadsList([...custom, ...DEFAULT_HEADS]));
@@ -193,7 +209,7 @@ export default function DonationHeadsPage({ user }) {
 
   useEffect(() => {
     fetchHeads();
-  }, [searchTerm, activeTrustName, isSuperAdmin]);
+  }, [searchTerm, activeTrustName, activeEmail, isSuperAdmin]);
 
   const handleDeleteClick = (id, name) => {
     setPopup({
@@ -209,8 +225,9 @@ export default function DonationHeadsPage({ user }) {
         let deleteUrl = `/api/donation-heads/${id}`;
         if (isSuperAdmin) {
           deleteUrl += '?isSuperAdmin=true';
-        } else if (activeTrustName) {
-          deleteUrl += `?trustName=${encodeURIComponent(activeTrustName)}&trustEmail=${encodeURIComponent(activeUser?.email || '')}`;
+        } else {
+          if (activeTrustName) deleteUrl += `?trustName=${encodeURIComponent(activeTrustName)}`;
+          if (activeEmail) deleteUrl += `${activeTrustName ? '&' : '?'}trustEmail=${encodeURIComponent(activeEmail)}`;
         }
 
         try {
@@ -221,13 +238,13 @@ export default function DonationHeadsPage({ user }) {
 
         // Also remove from localStorage if present
         try {
-          const custom = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+          const custom = JSON.parse(localStorage.getItem(storageKey) || '[]');
           const baseName = name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
           const updated = custom.filter(c => {
             const cBase = (c.rawName || c.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
             return c._id !== id && cBase !== baseName;
           });
-          localStorage.setItem('custom_donation_heads', JSON.stringify(updated));
+          localStorage.setItem(storageKey, JSON.stringify(updated));
         } catch (e) {}
 
         setHeads(prev => prev.filter(h => {

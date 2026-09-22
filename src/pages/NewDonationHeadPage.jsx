@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
 import { Menu, Sparkles, ListFilter } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
 export default function NewDonationHeadPage({ user }) {
   const navigate = useNavigate();
@@ -16,10 +17,14 @@ export default function NewDonationHeadPage({ user }) {
 
   const targetListUrl = isSuperAdmin ? '/superadmin/donation-heads' : '/trust/donation-head';
 
-  const activeUser = user || (() => {
-    try { return JSON.parse(localStorage.getItem('user_info') || '{}'); } catch(e) { return {}; }
-  })();
-  const activeTrustName = activeUser?.trustName || activeUser?.name || '';
+  const trustSession = getTrustSession();
+  const activeUser = (!isSuperAdmin && !isSuperUser(user) && user) || (!isSuperAdmin ? trustSession?.user : null) || user || {};
+  const activeTrustName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || (!isSuperUser(activeUser) ? activeUser?.name : '') || '';
+  const activeEmail = (activeUser?.email || '').trim().toLowerCase();
+
+  const storageKey = isSuperAdmin
+    ? 'custom_donation_heads_superadmin'
+    : `custom_donation_heads_${activeEmail || 'trust'}`;
 
   const [headName, setHeadName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +42,7 @@ export default function NewDonationHeadPage({ user }) {
     if (editId) {
       // First check local storage
       try {
-        const stored = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+        const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
         const found = stored.find(s => s._id === editId);
         if (found) {
           const clean = (found.rawName || found.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
@@ -55,7 +60,7 @@ export default function NewDonationHeadPage({ user }) {
         })
         .catch(console.error);
     }
-  }, [editId]);
+  }, [editId, storageKey]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -82,14 +87,15 @@ export default function NewDonationHeadPage({ user }) {
           body: JSON.stringify({
             name: cleanHeadName,
             isGlobal: isSuperAdmin,
-            trustName: isSuperAdmin ? '' : activeTrustName
+            trustName: isSuperAdmin ? '' : activeTrustName,
+            trustEmail: isSuperAdmin ? '' : activeEmail
           })
         });
 
         try {
-          const stored = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+          const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
           const updated = stored.map(s => s._id === editId ? { ...s, name: cleanHeadName, rawName: cleanHeadName } : s);
-          localStorage.setItem('custom_donation_heads', JSON.stringify(updated));
+          localStorage.setItem(storageKey, JSON.stringify(updated));
         } catch (err) {}
       } else {
         const res = await fetch('/api/donation-heads', {
@@ -98,23 +104,24 @@ export default function NewDonationHeadPage({ user }) {
           body: JSON.stringify({
             name: cleanHeadName,
             isGlobal: isSuperAdmin,
-            createdBy: isSuperAdmin ? 'Super Admin' : (activeTrustName || activeUser?.email || 'Admin'),
+            isSuperAdmin: isSuperAdmin,
+            createdBy: isSuperAdmin ? 'Super Admin' : (activeTrustName || activeEmail || 'Admin'),
             trustName: isSuperAdmin ? '' : activeTrustName,
-            trustEmail: isSuperAdmin ? '' : (activeUser?.email || '')
+            trustEmail: isSuperAdmin ? '' : activeEmail
           })
         });
         const d = await res.json();
 
         try {
-          const stored = JSON.parse(localStorage.getItem('custom_donation_heads') || '[]');
+          const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
           const cleaned = stored.filter(s => {
             const sBase = (s.rawName || s.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
             return sBase !== cleanHeadName.toLowerCase();
           });
           if (d.success && d.data) {
-            localStorage.setItem('custom_donation_heads', JSON.stringify([d.data, ...cleaned]));
+            localStorage.setItem(storageKey, JSON.stringify([d.data, ...cleaned]));
           } else {
-            localStorage.setItem('custom_donation_heads', JSON.stringify(cleaned));
+            localStorage.setItem(storageKey, JSON.stringify(cleaned));
           }
         } catch (err) {}
       }

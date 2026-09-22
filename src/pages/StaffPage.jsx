@@ -105,6 +105,7 @@ export default function StaffPage({ user: propUser }) {
     role: '',
     status: 'Active'
   });
+  const [toastMessage, setToastMessage] = useState('');
 
   // Stats from plan
   const [planStats, setPlanStats] = useState({
@@ -158,26 +159,27 @@ export default function StaffPage({ user: propUser }) {
         } catch (e) {}
       }
 
-      // Always merge with localStorage roles
+      // Merge with localStorage custom_roles
       try {
         const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
         localRoles.forEach(r => {
-          if (r?.roleName && !apiRoles.includes(r.roleName)) {
+          if (r?.roleName && !apiRoles.some(ar => ar.trim().toLowerCase() === r.roleName.trim().toLowerCase())) {
             apiRoles.push(r.roleName);
           }
         });
       } catch (e) {}
 
-      // Always merge with any roles currently present on existing staff
-      if (Array.isArray(staffData)) {
-        staffData.forEach(s => {
-          if (s?.role && !apiRoles.includes(s.role)) {
-            apiRoles.push(s.role);
+      // Deduplicate roles case-insensitively
+      const roleMap = new Map();
+      apiRoles.forEach(rName => {
+        if (rName && typeof rName === 'string' && rName.trim()) {
+          const key = rName.trim().toLowerCase();
+          if (!roleMap.has(key)) {
+            roleMap.set(key, rName.trim());
           }
-        });
-      }
-
-      const uniqueRoles = Array.from(new Set(apiRoles)).filter(Boolean);
+        }
+      });
+      const uniqueRoles = Array.from(roleMap.values());
       setRolesList(uniqueRoles);
 
       let currentPlan = activeUser?.plan || 'Standard';
@@ -195,11 +197,18 @@ export default function StaffPage({ user: propUser }) {
       }
 
       const planLower = (currentPlan || '').toLowerCase();
-      let baseAllowed = 4; // Standard plan default is 4
-      if (planLower.includes('enterprise')) baseAllowed = 999;
-      else if (planLower.includes('advanced')) baseAllowed = 9;
-      else if (planLower.includes('starter')) baseAllowed = 1;
-      else baseAllowed = 4; // Standard plan is 4
+      let baseAllowed = 2; // Standard plan default is 2
+      if (planLower.includes('basic') || planLower.includes('starter')) {
+        baseAllowed = 1;
+      } else if (planLower.includes('standard')) {
+        baseAllowed = 2;
+      } else if (planLower.includes('advanced')) {
+        baseAllowed = 9;
+      } else if (planLower.includes('enterprise')) {
+        baseAllowed = 999;
+      } else {
+        baseAllowed = 2;
+      }
 
       const totalAllowed = baseAllowed === 999 ? 999 : (baseAllowed + extraUsers);
       const availableCount = baseAllowed === 999 ? 'Unlimited' : Math.max(0, totalAllowed - staffData.length);
@@ -252,47 +261,118 @@ export default function StaffPage({ user: propUser }) {
     try {
       const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
       localRoles.forEach(r => {
-        if (r?.roleName && !currentRoles.includes(r.roleName)) {
+        if (r?.roleName && !currentRoles.some(cr => cr.trim().toLowerCase() === r.roleName.trim().toLowerCase())) {
           currentRoles.push(r.roleName);
         }
       });
     } catch (e) {}
-    if (Array.isArray(staff)) {
-      staff.forEach(s => {
-        if (s?.role && !currentRoles.includes(s.role)) {
-          currentRoles.push(s.role);
+
+    const safeMap = new Map();
+    currentRoles.forEach(rName => {
+      if (rName && typeof rName === 'string' && rName.trim()) {
+        const key = rName.trim().toLowerCase();
+        if (!safeMap.has(key)) {
+          safeMap.set(key, rName.trim());
         }
-      });
-    }
-    const safeRoles = Array.from(new Set(currentRoles)).filter(Boolean);
+      }
+    });
+    const safeRoles = Array.from(safeMap.values());
     if (safeRoles.length > 0) {
       setRolesList(safeRoles);
     }
 
-    const initialRole = safeRoles.length > 0 ? safeRoles[0] : '';
     setEditingStaff(null);
     setFieldErrors({});
     setStaffFormData({
       name: '',
       email: '',
       phone: '',
-      role: initialRole,
+      role: safeRoles.length > 0 ? safeRoles[0] : '',
       status: 'Active'
     });
     setModalOpen(true);
   };
 
-  const handleOpenEditModal = (s) => {
-    setEditingStaff(s);
+  const handleOpenEditModal = (staffMember) => {
+    setEditingStaff(staffMember);
     setFieldErrors({});
     setStaffFormData({
-      name: s.name || '',
-      email: s.email || '',
-      phone: s.phone || '',
-      role: s.role || (rolesList.length > 0 ? rolesList[0] : ''),
-      status: s.status || 'Active'
+      name: staffMember.name || '',
+      email: staffMember.email || '',
+      phone: (staffMember.phone || '').replace(/\D/g, '').slice(-10),
+      role: staffMember.role || (rolesList.length > 0 ? rolesList[0] : ''),
+      status: staffMember.status || 'Active'
     });
     setModalOpen(true);
+  };
+
+  const handleToggleStatus = async (staffMember) => {
+    const targetId = String(staffMember._id || staffMember.id || '');
+    const currentStatus = staffMember.status || 'Active';
+    const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+
+    // If attempting to activate, verify that assigned role exists in Member Roles
+    if (newStatus === 'Active') {
+      const assignedRole = (staffMember.role || '').trim();
+      const roleExists = rolesList.some(r =>
+        (typeof r === 'string' ? r : r.roleName || '').trim().toLowerCase() === assignedRole.toLowerCase()
+      );
+
+      if (!roleExists) {
+        setPopup({
+          isOpen: true,
+          type: 'error',
+          title: 'Cannot Activate Staff Member',
+          message: `Cannot activate "${staffMember.name}" because their assigned role "${assignedRole || 'Unknown'}" does not exist in Member Roles. Please recreate this role in Member Roles or edit this staff member to assign an existing active role.`,
+          confirmText: 'OK',
+          onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+        });
+        return;
+      }
+    }
+
+    // Optimistically update ONLY this specific target staff member
+    setStaff(prev => prev.map(s => {
+      const isMatch = (targetId && (String(s._id) === targetId || String(s.id) === targetId)) ||
+                      (staffMember.email && s.email && s.email.toLowerCase() === staffMember.email.toLowerCase());
+      return isMatch ? { ...s, status: newStatus } : s;
+    }));
+
+    try {
+      const res = await fetch(`/api/staff/${encodeURIComponent(targetId || staffMember.email)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setToastMessage(`Staff "${staffMember.name}" marked as ${newStatus}!`);
+        setTimeout(() => setToastMessage(''), 3000);
+      } else {
+        // Revert only this specific staff member on error
+        setStaff(prev => prev.map(s => {
+          const isMatch = (targetId && (String(s._id) === targetId || String(s.id) === targetId)) ||
+                          (staffMember.email && s.email && s.email.toLowerCase() === staffMember.email.toLowerCase());
+          return isMatch ? { ...s, status: currentStatus } : s;
+        }));
+        setPopup({
+          isOpen: true,
+          type: 'error',
+          title: 'Status Update Failed',
+          message: data.message || 'Could not update staff status.',
+          confirmText: 'OK',
+          onConfirm: () => setPopup(p => ({ ...p, isOpen: false }))
+        });
+      }
+    } catch (err) {
+      setStaff(prev => prev.map(s => {
+        const isMatch = (targetId && (String(s._id) === targetId || String(s.id) === targetId)) ||
+                        (staffMember.email && s.email && s.email.toLowerCase() === staffMember.email.toLowerCase());
+        return isMatch ? { ...s, status: currentStatus } : s;
+      }));
+      setToastMessage('Network error updating staff status.');
+      setTimeout(() => setToastMessage(''), 3000);
+    }
   };
 
   const handleFieldChange = (field, value) => {
@@ -376,6 +456,13 @@ export default function StaffPage({ user: propUser }) {
     }
     if (!selectedRole && rolesList.length === 0) {
       errors.role = 'Please add at least one role in Member Roles first.';
+    } else if (staffFormData.status === 'Active') {
+      const roleExists = rolesList.some(r =>
+        (typeof r === 'string' ? r : r.roleName || '').trim().toLowerCase() === selectedRole.toLowerCase()
+      );
+      if (!roleExists) {
+        errors.role = `The role "${selectedRole}" does not exist in Member Roles. Please recreate it in Member Roles or select an existing active role.`;
+      }
     }
 
     if (Object.keys(errors).length > 0) {
@@ -802,20 +889,21 @@ export default function StaffPage({ user: propUser }) {
                 <th style={thStyle}>Email</th>
                 <th style={thStyle}>Mobile</th>
                 <th style={thStyle}>Role</th>
+                <th style={thStyle}>Status</th>
                 <th style={thStyle}>Created At</th>
-                <th style={{ ...thStyle, width: '110px', textAlign: 'center' }}>Actions</th>
+                <th style={{ ...thStyle, width: '180px', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
                     Loading staff members...
                   </td>
                 </tr>
               ) : currentEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '30px 22px', color: '#555', fontSize: '13.5px' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '30px 22px', color: '#555', fontSize: '13.5px' }}>
                     {appliedFilter.search || appliedFilter.role ? (
                       <div>
                         <p style={{ margin: '0 0 8px 0', color: '#475569' }}>
@@ -861,11 +949,51 @@ export default function StaffPage({ user: propUser }) {
                     <td style={tdStyle}>
                       <span className="badge-pill badge-info">{s.role || 'Staff Member'}</span>
                     </td>
+                    <td style={tdStyle}>
+                      <span
+                        style={{
+                          fontSize: '11.5px',
+                          padding: '4px 10px',
+                          borderRadius: '20px',
+                          fontWeight: 600,
+                          backgroundColor: (s.status || 'Active') === 'Inactive' ? '#fee2e2' : '#dcfce7',
+                          color: (s.status || 'Active') === 'Inactive' ? '#b91c1c' : '#15803d',
+                          border: (s.status || 'Active') === 'Inactive' ? '1px solid #fca5a5' : '1px solid #bbf7d0',
+                          display: 'inline-block'
+                        }}
+                      >
+                        {s.status || 'Active'}
+                      </span>
+                    </td>
                     <td style={{ ...tdStyle, color: '#555' }}>
                       {s.createdAt ? formatToIST(s.createdAt) : (s.created ? formatToIST(s.created) : (s.formattedDate ? formatToIST(s.formattedDate) : 'Today'))}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                        {/* Active / Inactive Status Toggle Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(s)}
+                          title={(s.status || 'Active') === 'Active' ? 'Click to mark Inactive' : 'Click to mark Active'}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            backgroundColor: (s.status || 'Active') === 'Active' ? '#f0fdf4' : '#fef2f2',
+                            color: (s.status || 'Active') === 'Active' ? '#16a34a' : '#dc2626',
+                            border: (s.status || 'Active') === 'Active' ? '1px solid #86efac' : '1px solid #fca5a5',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: (s.status || 'Active') === 'Active' ? '#16a34a' : '#dc2626' }} />
+                          <span>{(s.status || 'Active') === 'Active' ? 'Active' : 'Inactive'}</span>
+                        </button>
+
                         <button
                           type="button"
                           title="Edit Staff"
@@ -1139,6 +1267,21 @@ export default function StaffPage({ user: propUser }) {
                     </span>
                   )}
                 </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                    Status
+                  </label>
+                  <select
+                    className="trust-select"
+                    style={{ width: '100%', height: '40px' }}
+                    value={staffFormData.status || 'Active'}
+                    onChange={(e) => handleFieldChange('status', e.target.value)}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
               </div>
 
               <div className="receipt-modal-footer">
@@ -1172,6 +1315,31 @@ export default function StaffPage({ user: propUser }) {
         onConfirm={popup.onConfirm}
         onCancel={popup.onCancel}
       />
+
+      {/* Top-Right Success Notification matching Profile Pages */}
+      {toastMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            zIndex: 99999,
+            backgroundColor: '#10b981',
+            color: '#ffffff',
+            borderRadius: '6px',
+            boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
+            padding: '12px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '13.5px',
+            fontWeight: '600'
+          }}
+        >
+          <CheckCircle2 size={18} />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </>
   );
 }

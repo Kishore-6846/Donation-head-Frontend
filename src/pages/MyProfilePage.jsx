@@ -129,6 +129,20 @@ export default function MyProfilePage({ user }) {
           .catch(() => {});
       }
     }
+
+    const handleSessionChange = (e) => {
+      setProfileData(getInitialProfile());
+    };
+
+    window.addEventListener('trust-session-change', handleSessionChange);
+    window.addEventListener('superadmin-session-change', handleSessionChange);
+    window.addEventListener('storage', handleSessionChange);
+
+    return () => {
+      window.removeEventListener('trust-session-change', handleSessionChange);
+      window.removeEventListener('superadmin-session-change', handleSessionChange);
+      window.removeEventListener('storage', handleSessionChange);
+    };
   }, [user, location.pathname, isSuperAdmin]);
 
   const scrollToTop = () => {
@@ -173,7 +187,7 @@ export default function MyProfilePage({ user }) {
               <tbody>
                 {/* Name */}
                 <tr style={{ borderBottom: '1px solid #f1f3f5' }}>
-                  <td style={{ width: '38%', padding: '12px 16px', fontWeight: '500', color: '#333' }}>Name</td>
+                  <td style={{ width: '38%', padding: '12px 16px', fontWeight: '500', color: '#333' }}>Name (Trust Name)</td>
                   <td style={{ padding: '12px 16px', color: '#111' }}>
                     <strong>{profileData.name}</strong>
                   </td>

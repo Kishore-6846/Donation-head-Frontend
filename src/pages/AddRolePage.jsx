@@ -96,6 +96,7 @@ export default function AddRolePage() {
 
   const [roleName, setRoleName] = useState('');
   const [permissions, setPermissions] = useState(defaultPermissions);
+  const [existingRoles, setExistingRoles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [inlineError, setInlineError] = useState('');
@@ -110,6 +111,22 @@ export default function AddRolePage() {
   const trustId = activeUser?._id || activeUser?.id || '';
 
   useEffect(() => {
+    // Fetch existing roles for duplicate check
+    const queryParam = trustEmail ? `?trustEmail=${encodeURIComponent(trustEmail)}` : '';
+    fetch(`/api/roles${queryParam}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.data)) {
+          setExistingRoles(d.data);
+        }
+      })
+      .catch(() => {
+        try {
+          const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+          setExistingRoles(stored);
+        } catch (e) {}
+      });
+
     if (editId) {
       setPageLoading(true);
       // First check local storage
@@ -144,7 +161,7 @@ export default function AddRolePage() {
         .catch(console.error)
         .finally(() => setPageLoading(false));
     }
-  }, [editId]);
+  }, [editId, trustEmail]);
 
   const [toastMessage, setToastMessage] = useState('');
 
@@ -162,40 +179,47 @@ export default function AddRolePage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isView) return;
-    if (!roleName.trim()) {
+    const cleanRoleName = roleName.trim();
+    if (!cleanRoleName) {
       setInlineError('Please enter a role name.');
       return;
     }
-    if (!/^[a-zA-Z\s]+$/.test(roleName.trim())) {
+    if (!/^[a-zA-Z\s]+$/.test(cleanRoleName)) {
       setInlineError('Role Name can only contain letters and spaces (no numbers or special characters).');
       return;
     }
-    setInlineError('');
 
+    // Client-side case-insensitive duplicate check
+    const normalizedTarget = cleanRoleName.toLowerCase();
+    if (editId) {
+      const isDuplicate = existingRoles.some(r => {
+        const isCurrent = r._id === editId || r.id === editId || r.roleName?.toLowerCase() === editId.toLowerCase();
+        return !isCurrent && r.roleName && r.roleName.trim().toLowerCase() === normalizedTarget;
+      });
+      if (isDuplicate) {
+        setInlineError(`Another member role named "${cleanRoleName}" already exists (case-insensitive). Duplicate roles are not allowed.`);
+        return;
+      }
+    } else {
+      const isDuplicate = existingRoles.some(r => r.roleName && r.roleName.trim().toLowerCase() === normalizedTarget);
+      if (isDuplicate) {
+        setInlineError(`A member role named "${cleanRoleName}" already exists (case-insensitive). Duplicate roles like "${cleanRoleName}" are not allowed.`);
+        return;
+      }
+    }
+
+    setInlineError('');
     setIsSubmitting(true);
     const dateStr = formatToIST(new Date());
 
     if (editId) {
       // Edit existing role
       try {
-        const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
-        const updated = stored.map(r => {
-          if (r._id === editId || r.roleName === editId) {
-            return { ...r, roleName: roleName.trim(), permissions };
-          }
-          return r;
-        });
-        localStorage.setItem('custom_roles', JSON.stringify(updated));
-      } catch (err) {
-        console.error('Error updating role in localStorage:', err);
-      }
-
-      try {
         const res = await fetch(`/api/roles/${editId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            roleName: roleName.trim(),
+            roleName: cleanRoleName,
             permissions,
             trustEmail: trustEmail || '',
             trustName: trustName || '',
@@ -203,16 +227,26 @@ export default function AddRolePage() {
           })
         });
         const data = await res.json();
-        if (data.success) {
+        if (res.ok && data.success) {
+          try {
+            const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+            const updated = stored.map(r => {
+              if (r._id === editId || r.roleName === editId) {
+                return { ...r, roleName: cleanRoleName, permissions };
+              }
+              return r;
+            });
+            localStorage.setItem('custom_roles', JSON.stringify(updated));
+          } catch (err) {}
+
           setToastMessage('Role updated successfully!');
-          setTimeout(() => navigate('/trust/roles'), 1200);
+          setTimeout(() => navigate('/trust/roles'), 1000);
         } else {
-          throw new Error(data.message || 'Error updating role');
+          setInlineError(data.message || 'Error updating role.');
         }
       } catch (err) {
         console.error('Error updating role:', err);
-        setToastMessage('Role updated successfully!');
-        setTimeout(() => navigate('/trust/roles'), 1200);
+        setInlineError(err.message || 'Network error updating role.');
       } finally {
         setIsSubmitting(false);
       }
@@ -220,32 +254,12 @@ export default function AddRolePage() {
     }
 
     // Add new role
-    const newRoleObj = {
-      _id: `role_${Date.now()}`,
-      roleName: roleName.trim(),
-      description: 'System roles for trust members',
-      permissions,
-      created: dateStr,
-      trustEmail: trustEmail || '',
-      trustName: trustName || '',
-      trustId: trustId || ''
-    };
-
-    // Save to localStorage immediately as reliable cache/fallback
-    try {
-      const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
-      const updated = [newRoleObj, ...stored.filter(r => r.roleName !== roleName.trim())];
-      localStorage.setItem('custom_roles', JSON.stringify(updated));
-    } catch (err) {
-      console.error('Error saving role to localStorage:', err);
-    }
-
     try {
       const res = await fetch('/api/roles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          roleName: roleName.trim(),
+          roleName: cleanRoleName,
           permissions,
           trustEmail: trustEmail || '',
           trustName: trustName || '',
@@ -254,24 +268,34 @@ export default function AddRolePage() {
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
+        const newRoleObj = {
+          _id: data.data?._id || `role_${Date.now()}`,
+          roleName: cleanRoleName,
+          description: 'System roles for trust members',
+          permissions,
+          created: dateStr,
+          trustEmail: trustEmail || '',
+          trustName: trustName || '',
+          trustId: trustId || ''
+        };
+
+        try {
+          const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
+          const updated = [newRoleObj, ...stored.filter(r => r.roleName?.trim().toLowerCase() !== cleanRoleName.toLowerCase())];
+          localStorage.setItem('custom_roles', JSON.stringify(updated));
+        } catch (err) {}
+
         setToastMessage('Role added successfully!');
         setTimeout(() => {
           navigate('/trust/roles');
-        }, 1200);
+        }, 1000);
       } else {
-        setInlineError(data.message || 'Error creating role on server.');
-        setToastMessage('Role saved locally!');
-        setTimeout(() => {
-          navigate('/trust/roles');
-        }, 1200);
+        setInlineError(data.message || 'Error creating role.');
       }
     } catch (err) {
       console.error('Error adding role:', err);
-      setToastMessage('Role added successfully!');
-      setTimeout(() => {
-        navigate('/trust/roles');
-      }, 1200);
+      setInlineError(err.message || 'Network error adding role.');
     } finally {
       setIsSubmitting(false);
     }

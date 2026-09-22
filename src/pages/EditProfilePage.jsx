@@ -20,6 +20,9 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   const [toastMessage, setToastMessage] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, target: null });
 
+  const [removeLogoFlag, setRemoveLogoFlag] = useState(false);
+  const [removeSignatureFlag, setRemoveSignatureFlag] = useState(false);
+
   const triggerDelete = (target) => {
     setDeleteConfirm({ isOpen: true, target });
   };
@@ -32,12 +35,14 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     if (deleteConfirm.target === 'logo') {
       setFormData(prev => ({ ...prev, logo: '' }));
       setHasLogo(false);
+      setRemoveLogoFlag(true);
       setLogoError('');
       if (logoInputRef.current) logoInputRef.current.value = '';
       setToastMessage('Trust logo removed successfully!');
     } else if (deleteConfirm.target === 'signature') {
       setFormData(prev => ({ ...prev, signature: '' }));
       setHasSignature(false);
+      setRemoveSignatureFlag(true);
       setSignatureError('');
       if (signatureInputRef.current) signatureInputRef.current.value = '';
       setToastMessage('Signature photo removed successfully!');
@@ -278,6 +283,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       if (base64) {
         setFormData(prev => ({ ...prev, logo: base64 }));
         setHasLogo(true);
+        setRemoveLogoFlag(false);
         setToastMessage('Logo selected! Click Submit to apply.');
         setTimeout(() => setToastMessage(''), 3000);
       }
@@ -316,6 +322,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       if (base64) {
         setFormData(prev => ({ ...prev, signature: base64 }));
         setHasSignature(true);
+        setRemoveSignatureFlag(false);
         setToastMessage('Signature selected! Click Submit to apply.');
         setTimeout(() => setToastMessage(''), 3000);
       }
@@ -376,6 +383,9 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     }
 
     const existingUser = (isSuperAdmin ? (getSuperAdminSession()?.user || {}) : (getTrustSession()?.user || {})) || {};
+    const finalLogo = removeLogoFlag ? '' : (formData.logo || existingUser.logo || '');
+    const finalSignature = removeSignatureFlag ? '' : (formData.signature || existingUser.signature || '');
+
     const updatedUser = {
       ...existingUser,
       trustName: formData.name,
@@ -394,8 +404,8 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       contactPerson: formData.contactPerson,
       contactPersonEmail: formData.contactPersonEmail,
       contactPersonMobile: formData.contactPersonMobile,
-      logo: formData.logo || '',
-      signature: formData.signature || '',
+      logo: finalLogo,
+      signature: finalSignature,
       signatoryName: formData.contactPerson || `${formData.firstName || ''} ${formData.surname || ''}`.trim() || '',
       signatoryPan: cleanSignatoryPan || formData.signatoryPan || formData.panNo || '',
       designation: formData.designation || 'Authorized Signatory',
@@ -418,6 +428,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       if (userEmail) {
         localStorage.setItem(`profile_data_${userEmail}`, JSON.stringify(updatedUser));
       }
+      window.dispatchEvent(new Event('storage'));
     } catch (sessionErr) {
       console.warn('Session save warning:', sessionErr);
     }
@@ -433,7 +444,11 @@ export default function EditProfilePage({ user, onUpdateUser }) {
         await fetch(`/api/users/${encodeURIComponent(targetId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedUser)
+          body: JSON.stringify({
+            ...updatedUser,
+            removeLogo: removeLogoFlag,
+            removeSignature: removeSignatureFlag
+          })
         });
       }
     } catch (e) {
@@ -485,7 +500,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
             {/* Left Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '12.5px' }}>Name:</label>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Name (Trust Name):</label>
                 <input
                   type="text"
                   name="name"

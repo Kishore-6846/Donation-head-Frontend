@@ -130,6 +130,11 @@ export default function RolesPage({ user: propUser }) {
     roleId: null,
     roleName: ''
   });
+  const [blockedAlert, setBlockedAlert] = useState({
+    isOpen: false,
+    roleName: '',
+    count: 0
+  });
   const [toastMessage, setToastMessage] = useState('');
 
   const fetchRolesAndStaff = async () => {
@@ -154,11 +159,11 @@ export default function RolesPage({ user: propUser }) {
       const localRoles = JSON.parse(localStorage.getItem('custom_roles') || '[]');
       const roleMap = new Map();
       apiRoles.forEach(r => {
-        if (r && r.roleName) roleMap.set(r.roleName, r);
+        if (r && r.roleName) roleMap.set(r.roleName.trim().toLowerCase(), r);
       });
       localRoles.forEach(r => {
-        if (r && r.roleName && !roleMap.has(r.roleName)) {
-          roleMap.set(r.roleName, r);
+        if (r && r.roleName && !roleMap.has(r.roleName.trim().toLowerCase())) {
+          roleMap.set(r.roleName.trim().toLowerCase(), r);
         }
       });
       setRoles(Array.from(roleMap.values()));
@@ -203,6 +208,21 @@ export default function RolesPage({ user: propUser }) {
   };
 
   const triggerDelete = (id, name) => {
+    // Check if any active staff members are assigned to this role
+    const activeMembers = staffList.filter(s =>
+      (s.role || '').trim().toLowerCase() === (name || '').trim().toLowerCase() &&
+      (s.status || 'Active').toLowerCase() === 'active'
+    );
+
+    if (activeMembers.length > 0) {
+      setBlockedAlert({
+        isOpen: true,
+        roleName: name,
+        count: activeMembers.length
+      });
+      return;
+    }
+
     setDeleteConfirm({
       isOpen: true,
       roleId: id,
@@ -219,8 +239,19 @@ export default function RolesPage({ user: propUser }) {
     setDeleteConfirm({ isOpen: false, roleId: null, roleName: '' });
 
     try {
-      if (roleId) {
-        await fetch(`/api/roles/${roleId}`, { method: 'DELETE' });
+      const queryParam = trustEmail ? `?trustEmail=${encodeURIComponent(trustEmail)}` : '';
+      const target = roleId || roleName;
+      if (target) {
+        const res = await fetch(`/api/roles/${encodeURIComponent(target)}${queryParam}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!data.success) {
+          setBlockedAlert({
+            isOpen: true,
+            roleName: roleName,
+            count: 1
+          });
+          return;
+        }
       }
     } catch (e) {
       console.error('Error deleting role from API:', e);
@@ -228,7 +259,7 @@ export default function RolesPage({ user: propUser }) {
 
     try {
       const stored = JSON.parse(localStorage.getItem('custom_roles') || '[]');
-      const updated = stored.filter(r => r._id !== roleId && r.roleName !== roleName);
+      const updated = stored.filter(r => r._id !== roleId && r.roleName?.trim().toLowerCase() !== roleName.trim().toLowerCase());
       localStorage.setItem('custom_roles', JSON.stringify(updated));
     } catch (e) {
       console.error('Error updating localStorage:', e);
@@ -613,6 +644,24 @@ export default function RolesPage({ user: propUser }) {
           </div>
         </div>
       )}
+
+      {/* Blocked Deletion Notice Modal */}
+      <SimplePopup
+        isOpen={blockedAlert.isOpen}
+        type="error"
+        title="Cannot Delete Role"
+        message={`There are ${blockedAlert.count} active staff member(s) assigned to "${blockedAlert.roleName}". To delete this role, please first mark those staff members as Inactive, reassign them to another role, or remove them.`}
+        confirmText="Manage Staff"
+        cancelText="Close"
+        showCancel={true}
+        onConfirm={() => {
+          setBlockedAlert({ isOpen: false, roleName: '', count: 0 });
+          navigate('/trust/staff');
+        }}
+        onCancel={() => {
+          setBlockedAlert({ isOpen: false, roleName: '', count: 0 });
+        }}
+      />
 
       {/* Themed Confirmation Modal */}
       <SimplePopup
