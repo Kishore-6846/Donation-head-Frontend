@@ -23,6 +23,14 @@ import {
   ExternalLink
 } from 'lucide-react';
 
+const formatINR = (val) => {
+  const num = Number(val) || 0;
+  return num.toLocaleString('en-IN', {
+    minimumFractionDigits: num % 1 !== 0 ? 2 : 0,
+    maximumFractionDigits: 2
+  });
+};
+
 export default function SuperAdminReportsPage() {
   const [activeTab, setActiveTab] = useState('revenue'); // 'revenue' | 'receipts' | 'growth'
   const [loading, setLoading] = useState(false);
@@ -260,7 +268,7 @@ export default function SuperAdminReportsPage() {
               <div className="stat-modern-top">
                 <div className="stat-modern-icon"><CreditCard size={22} /></div>
                 <span className="stat-modern-val">
-                  ₹{(rev?.totalRevenue || 0).toLocaleString('en-IN')}
+                  ₹{formatINR(rev?.totalRevenue)}
                 </span>
               </div>
               <div className="stat-modern-bottom">
@@ -291,7 +299,7 @@ export default function SuperAdminReportsPage() {
             <div className="stat-modern-card card-purple">
               <div className="stat-modern-top">
                 <div className="stat-modern-icon"><TrendingUp size={22} /></div>
-                <span className="stat-modern-val">₹{(rev?.averageRevenuePerTrust || 0).toLocaleString('en-IN')}</span>
+                <span className="stat-modern-val">₹{formatINR(rev?.averageRevenuePerTrust)}</span>
               </div>
               <div className="stat-modern-bottom">
                 <span className="stat-modern-title">Average Revenue / Trust</span>
@@ -422,7 +430,7 @@ export default function SuperAdminReportsPage() {
                             </span>
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 600, color: '#334155', fontSize: '13px' }}>
-                            ₹{Number(admin.planPrice || 0).toLocaleString('en-IN')}
+                            ₹{formatINR(admin.planPrice)}
                           </td>
                           <td style={{ textAlign: 'center', fontSize: '12.5px' }}>
                             <span style={{ fontWeight: 600, color: '#0f172a' }}>{admin.staffCount}</span>
@@ -435,11 +443,11 @@ export default function SuperAdminReportsPage() {
                           </td>
                           <td style={{ textAlign: 'right', fontSize: '13px', color: admin.extraStaffRevenue > 0 ? '#0284c7' : '#94a3b8' }}>
                             {admin.extraStaffRevenue > 0
-                              ? `+₹${Number(admin.extraStaffRevenue).toLocaleString('en-IN')}`
+                              ? `+₹${formatINR(admin.extraStaffRevenue)}`
                               : '—'}
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669', fontSize: '14px' }}>
-                            ₹{Number(admin.totalRevenue || 0).toLocaleString('en-IN')}
+                            ₹{formatINR(admin.totalRevenue)}
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -492,14 +500,14 @@ export default function SuperAdminReportsPage() {
                         Total Summary ({filteredAdmins.length} Admins)
                       </td>
                       <td style={{ textAlign: 'right', padding: '12px 16px', fontSize: '13.5px', color: '#334155' }}>
-                        ₹{filteredTotals.basePlanSum.toLocaleString('en-IN')}
+                        ₹{formatINR(filteredTotals.basePlanSum)}
                       </td>
                       <td style={{ textAlign: 'center', color: '#64748b' }}>—</td>
                       <td style={{ textAlign: 'right', padding: '12px 16px', fontSize: '13.5px', color: '#0284c7' }}>
-                        +₹{filteredTotals.addonSum.toLocaleString('en-IN')}
+                        +₹{formatINR(filteredTotals.addonSum)}
                       </td>
                       <td style={{ textAlign: 'right', padding: '12px 16px', fontSize: '15px', color: '#059669' }}>
-                        ₹{filteredTotals.grandTotalSum.toLocaleString('en-IN')}
+                        ₹{formatINR(filteredTotals.grandTotalSum)}
                       </td>
                       <td colSpan={3} style={{ color: '#64748b', fontSize: '12px' }}>
                         All payments captured via Razorpay
@@ -595,7 +603,11 @@ export default function SuperAdminReportsPage() {
             <div className="stat-modern-card card-blue">
               <div className="stat-modern-top">
                 <div className="stat-modern-icon"><TrendingUp size={22} /></div>
-                <span className="stat-modern-val">₹{(rcpt.totalDonationVolume / 100000).toFixed(2)}L</span>
+                <span className="stat-modern-val">
+                  {rcpt.totalDonationVolume >= 100000
+                    ? `₹${(rcpt.totalDonationVolume / 100000).toFixed(2)}L`
+                    : `₹${rcpt.totalDonationVolume.toLocaleString('en-IN')}`}
+                </span>
               </div>
               <div className="stat-modern-bottom">
                 <span className="stat-modern-title">Total Donations Volume</span>
@@ -733,17 +745,21 @@ export default function SuperAdminReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {growth.monthlyRegistrations.map((m, idx) => (
-                  <tr key={idx}>
-                    <td style={{ fontWeight: 600, color: '#0f172a' }}>{m.month}</td>
-                    <td>{m.count} Trusts</td>
-                    <td>
-                      <div style={{ width: '200px', height: '10px', backgroundColor: '#f1f5f9', borderRadius: '5px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${Math.min(100, (m.count / 10) * 100)}%`, backgroundColor: '#10b981', borderRadius: '5px' }} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {growth.monthlyRegistrations.map((m, idx) => {
+                  const maxCount = Math.max(1, ...growth.monthlyRegistrations.map(x => x.count || 1));
+                  const percentage = Math.min(100, Math.max(15, (m.count / maxCount) * 100));
+                  return (
+                    <tr key={idx}>
+                      <td style={{ fontWeight: 600, color: '#0f172a' }}>{m.month}</td>
+                      <td>{m.count} Trusts</td>
+                      <td>
+                        <div style={{ width: '200px', height: '10px', backgroundColor: '#f1f5f9', borderRadius: '5px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${percentage}%`, backgroundColor: '#10b981', borderRadius: '5px' }} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

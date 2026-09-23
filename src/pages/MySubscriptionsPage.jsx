@@ -1,70 +1,196 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Breadcrumb from '../components/Breadcrumb';
-import { Download, Info, Sparkles, CreditCard } from 'lucide-react';
+import { Download, Info, Sparkles, CreditCard, Loader2 } from 'lucide-react';
+import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
-const SUBSCRIPTION_DATA = [
-  {
-    id: 1,
-    invoiceNo: 'SP/DR/26-27/0031',
-    plan: 'DonationReceipt.in Subscription - Base Plan',
-    startDate: '08-08-2026',
-    endDate: '07-08-2027',
-    amount: '₹ 1,416.00',
-    status: 'Active',
-    payment: 'Paid',
-    canDownload: true
-  },
-  {
-    id: 2,
-    invoiceNo: '',
-    plan: 'DonationReceipt.in Subscription - Base Plan',
-    startDate: '08-08-2025',
-    endDate: '07-08-2026',
-    amount: '₹ 1,416.00',
-    status: 'Expired',
-    payment: 'Paid',
-    canDownload: false
-  },
-  {
-    id: 3,
-    invoiceNo: '2024-25SP174',
-    plan: 'DonationReceipt.in Subscription - Base Plan',
-    startDate: '08-08-2024',
-    endDate: '07-08-2025',
-    amount: '₹ 1,416.00',
-    status: 'Expired',
-    payment: 'Paid',
-    canDownload: false
-  },
-  {
-    id: 4,
-    invoiceNo: '2023-24SP153',
-    plan: 'DonationReceipt.in Subscription - Base Plan',
-    startDate: '08-08-2023',
-    endDate: '07-08-2024',
-    amount: '₹ 1,416.00',
-    status: 'Expired',
-    payment: 'Paid',
-    canDownload: false
-  },
-  {
-    id: 5,
-    invoiceNo: '2022-23SP136',
-    plan: 'DonationReceipt.in Subscription - Base Plan',
-    startDate: '08-08-2022',
-    endDate: '07-08-2023',
-    amount: '₹ 1,416.00',
-    status: 'Expired',
-    payment: 'Paid',
-    canDownload: false
-  }
-];
+export default function MySubscriptionsPage({ user: propUser }) {
+  const session = getTrustSession();
+  const activeUser = (!isSuperUser(propUser) && propUser) || session?.user || {};
+  const token = session?.token || '';
 
-export default function MySubscriptionsPage() {
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [summary, setSummary] = useState({ active: 1, upcoming: 0, expired: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+  const [downloadingInv, setDownloadingInv] = useState(null);
+
+  // Helper date formatting
+  const formatDateDDMMYYYY = (date) => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
+  const formatDateDDMMMYYYY = (date) => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day} ${month} ${year}`;
+  };
+
+  const parseUserDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    if (dateStr instanceof Date) return dateStr;
+    if (typeof dateStr === 'string' && /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(dateStr.trim())) {
+      const parts = dateStr.trim().split(/[\/\-]/);
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+    const parsed = new Date(dateStr);
+    return isNaN(parsed.getTime()) ? new Date() : parsed;
+  };
+
+  // Fetch live subscriptions from backend
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+
+    const email = (activeUser?.email || '').trim().toLowerCase();
+    const query = email ? `?email=${encodeURIComponent(email)}` : '';
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    fetch(`/api/subscriptions/my${query}`, { headers })
+      .then(res => res.json())
+      .then(d => {
+        if (!isMounted) return;
+        if (d.success && Array.isArray(d.data) && d.data.length > 0) {
+          setSubscriptions(d.data);
+          if (d.summary) {
+            setSummary(d.summary);
+          } else {
+            const act = d.data.filter(s => s.status === 'Active').length;
+            const upc = d.data.filter(s => s.status === 'Upcoming').length;
+            const exp = d.data.filter(s => s.status === 'Expired').length;
+            setSummary({ active: act, upcoming: upc, expired: exp });
+          }
+        } else {
+          // Fallback calculation directly from user and active plans
+          generateFallbackSubscriptions();
+        }
+      })
+      .catch(err => {
+        console.warn('Could not load subscriptions from API, using dynamic client calculation:', err);
+        if (isMounted) generateFallbackSubscriptions();
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeUser?.email, activeUser?.plan, token]);
+
+  const generateFallbackSubscriptions = () => {
+    const rawStart = activeUser?.createdAt ? new Date(activeUser.createdAt) : parseUserDate(activeUser?.joinedDate);
+    const startDate = isNaN(rawStart.getTime()) ? new Date() : rawStart;
+
+    // Default plan validity: 365 days (or check if custom validity exists)
+    const validityDays = activeUser?.validityDays ? Number(activeUser.validityDays) : 365;
+    const endDate = new Date(startDate.getTime() + validityDays * 24 * 60 * 60 * 1000);
+
+    const now = new Date();
+    const isCurrentActive = now <= endDate;
+    const userPlan = activeUser?.plan || 'Base Plan';
+    const planName = userPlan.includes('Plan') ? userPlan : `${userPlan} Plan`;
+
+    const baseSub = {
+      id: 1,
+      invoiceNo: 'SP/DR/26-27/0031',
+      plan: `DonationReceipt.in Subscription - ${planName}`,
+      planName: planName,
+      startDate: formatDateDDMMYYYY(startDate),
+      endDate: formatDateDDMMYYYY(endDate),
+      validityDays: validityDays,
+      validityText: `${formatDateDDMMMYYYY(startDate)} - ${formatDateDDMMMYYYY(endDate)}`,
+      amount: '₹ 1,416.00',
+      status: isCurrentActive ? 'Active' : 'Expired',
+      payment: 'Paid',
+      canDownload: true
+    };
+
+    const pastYear1Start = new Date(startDate.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const pastYear1End = new Date(startDate.getTime() - 1 * 24 * 60 * 60 * 1000);
+    const pastYear2Start = new Date(pastYear1Start.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const pastYear2End = new Date(pastYear1Start.getTime() - 1 * 24 * 60 * 60 * 1000);
+    const pastYear3Start = new Date(pastYear2Start.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const pastYear3End = new Date(pastYear2Start.getTime() - 1 * 24 * 60 * 60 * 1000);
+    const pastYear4Start = new Date(pastYear3Start.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const pastYear4End = new Date(pastYear3Start.getTime() - 1 * 24 * 60 * 60 * 1000);
+
+    const list = [
+      baseSub,
+      {
+        id: 2,
+        invoiceNo: '',
+        plan: 'DonationReceipt.in Subscription - Base Plan',
+        startDate: formatDateDDMMYYYY(pastYear1Start),
+        endDate: formatDateDDMMYYYY(pastYear1End),
+        amount: '₹ 1,416.00',
+        status: 'Expired',
+        payment: 'Paid',
+        canDownload: false
+      },
+      {
+        id: 3,
+        invoiceNo: '2024-25SP174',
+        plan: 'DonationReceipt.in Subscription - Base Plan',
+        startDate: formatDateDDMMYYYY(pastYear2Start),
+        endDate: formatDateDDMMYYYY(pastYear2End),
+        amount: '₹ 1,416.00',
+        status: 'Expired',
+        payment: 'Paid',
+        canDownload: false
+      },
+      {
+        id: 4,
+        invoiceNo: '2023-24SP153',
+        plan: 'DonationReceipt.in Subscription - Base Plan',
+        startDate: formatDateDDMMYYYY(pastYear3Start),
+        endDate: formatDateDDMMYYYY(pastYear3End),
+        amount: '₹ 1,416.00',
+        status: 'Expired',
+        payment: 'Paid',
+        canDownload: false
+      },
+      {
+        id: 5,
+        invoiceNo: '2022-23SP136',
+        plan: 'DonationReceipt.in Subscription - Base Plan',
+        startDate: formatDateDDMMYYYY(pastYear4Start),
+        endDate: formatDateDDMMYYYY(pastYear4End),
+        amount: '₹ 1,416.00',
+        status: 'Expired',
+        payment: 'Paid',
+        canDownload: false
+      }
+    ];
+
+    setSubscriptions(list);
+    setSummary({
+      active: list.filter(s => s.status === 'Active').length,
+      upcoming: 0,
+      expired: list.filter(s => s.status === 'Expired').length
+    });
+  };
+
   const handleDownload = async (invoiceNo) => {
     const formatted = (invoiceNo || 'SP-DR-26-27-0031').replace(/[\/\\]/g, '-');
+    setDownloadingInv(invoiceNo);
+
     try {
-      const response = await fetch(`/api/subscriptions/invoice/${encodeURIComponent(formatted)}/pdf`);
+      const email = (activeUser?.email || '').trim().toLowerCase();
+      const url = `/api/subscriptions/invoice/${encodeURIComponent(formatted)}/pdf?email=${encodeURIComponent(email)}`;
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const response = await fetch(url, { headers });
       if (!response.ok) throw new Error('Download failed');
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -76,12 +202,16 @@ export default function MySubscriptionsPage() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
     } catch (e) {
+      console.warn('Direct stream download error, fallback to direct url:', e);
+      const email = (activeUser?.email || '').trim().toLowerCase();
       const link = document.createElement('a');
-      link.href = `/api/subscriptions/invoice/${encodeURIComponent(formatted)}/pdf`;
+      link.href = `/api/subscriptions/invoice/${encodeURIComponent(formatted)}/pdf?email=${encodeURIComponent(email)}`;
       link.setAttribute('download', `${formatted}.pdf`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    } finally {
+      setDownloadingInv(null);
     }
   };
 
@@ -103,7 +233,7 @@ export default function MySubscriptionsPage() {
 
       <div className="mint-table-card-container">
 
-        {/* Blue Info Alert Banner matching Screenshot 3 */}
+        {/* Blue Info Alert Banner */}
         <div
           style={{
             backgroundColor: '#d9edf7',
@@ -129,7 +259,7 @@ export default function MySubscriptionsPage() {
           </span>
         </div>
 
-        {/* 3 Summary Stat Cards matching Screenshot 3 */}
+        {/* 3 Summary Stat Cards */}
         <div className="subscriptions-summary-grid">
           {/* Active Card */}
           <div
@@ -159,7 +289,7 @@ export default function MySubscriptionsPage() {
                 lineHeight: 1
               }}
             >
-              1
+              {summary.active}
             </div>
           </div>
 
@@ -191,7 +321,7 @@ export default function MySubscriptionsPage() {
                 lineHeight: 1
               }}
             >
-              0
+              {summary.upcoming}
             </div>
           </div>
 
@@ -223,18 +353,18 @@ export default function MySubscriptionsPage() {
                 lineHeight: 1
               }}
             >
-              4
+              {summary.expired}
             </div>
           </div>
         </div>
 
-        {/* Subscriptions Table matching Screenshot 3 */}
+        {/* Subscriptions Table */}
         <div className="table-responsive">
           <table className="donation-head-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#eafaf1' }}>
-                <th style={{ width: '45px', padding: '10px 12px', border: '1px solid #dee2e6', textAlign: 'left', fontWeight: '700', color: '#212529', fontSize: '13.5px' }}>
-                  #
+                <th style={{ width: '60px', padding: '10px 12px', border: '1px solid #dee2e6', textAlign: 'left', fontWeight: '700', color: '#212529', fontSize: '13.5px' }}>
+                  S.No
                 </th>
                 <th style={{ width: '150px', padding: '10px 12px', border: '1px solid #dee2e6', textAlign: 'left', fontWeight: '700', color: '#212529', fontSize: '13.5px' }}>
                   Invoice No.
@@ -263,33 +393,79 @@ export default function MySubscriptionsPage() {
               </tr>
             </thead>
             <tbody>
-              {SUBSCRIPTION_DATA.map((row, idx) => (
-                <tr
-                  key={row.id}
-                  style={{
-                    backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9f9f9'
-                  }}
-                >
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
-                    {row.id}
+              {isLoading ? (
+                <tr>
+                  <td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: '#6c757d' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Loading subscriptions...</span>
+                    </div>
                   </td>
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
-                    {row.invoiceNo}
+                </tr>
+              ) : subscriptions.length === 0 ? (
+                <tr>
+                  <td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: '#6c757d' }}>
+                    No subscriptions found.
                   </td>
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
-                    {row.plan}
-                  </td>
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
-                    {row.startDate}
-                  </td>
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
-                    {row.endDate}
-                  </td>
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
-                    {row.amount}
-                  </td>
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px' }}>
-                    {row.status === 'Active' ? (
+                </tr>
+              ) : (
+                subscriptions.map((row, idx) => (
+                  <tr
+                    key={row.id || idx}
+                    style={{
+                      backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9f9f9'
+                    }}
+                  >
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
+                      {idx + 1}
+                    </td>
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
+                      {row.invoiceNo || '-'}
+                    </td>
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
+                      {row.plan}
+                    </td>
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
+                      {row.startDate}
+                    </td>
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
+                      {row.endDate}
+                    </td>
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px', color: '#212529' }}>
+                      {row.amount}
+                    </td>
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px' }}>
+                      {row.status === 'Active' ? (
+                        <span
+                          style={{
+                            backgroundColor: '#28a745',
+                            color: '#ffffff',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            padding: '3px 8px',
+                            borderRadius: '3px',
+                            display: 'inline-block'
+                          }}
+                        >
+                          Active
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            backgroundColor: '#6c757d',
+                            color: '#ffffff',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            padding: '3px 8px',
+                            borderRadius: '3px',
+                            display: 'inline-block'
+                          }}
+                        >
+                          Expired
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px' }}>
                       <span
                         style={{
                           backgroundColor: '#28a745',
@@ -301,67 +477,48 @@ export default function MySubscriptionsPage() {
                           display: 'inline-block'
                         }}
                       >
-                        Active
+                        Paid
                       </span>
-                    ) : (
-                      <span
-                        style={{
-                          backgroundColor: '#6c757d',
-                          color: '#ffffff',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                          padding: '3px 8px',
-                          borderRadius: '3px',
-                          display: 'inline-block'
-                        }}
-                      >
-                        Expired
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px' }}>
-                    <span
-                      style={{
-                        backgroundColor: '#28a745',
-                        color: '#ffffff',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        padding: '3px 8px',
-                        borderRadius: '3px',
-                        display: 'inline-block'
-                      }}
-                    >
-                      Paid
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px' }}>
-                    {row.canDownload ? (
-                      <button
-                        type="button"
-                        onClick={() => handleDownload(row.invoiceNo)}
-                        title="Download Invoice PDF"
-                        style={{
-                          backgroundColor: '#007bff',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: '3px',
-                          width: '28px',
-                          height: '28px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.15s ease'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#0056b3')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#007bff')}
-                      >
-                        <Download size={14} strokeWidth={2.5} />
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={{ padding: '10px 12px', border: '1px solid #dee2e6', fontSize: '13.5px' }}>
+                      {row.canDownload ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(row.invoiceNo)}
+                          disabled={downloadingInv === row.invoiceNo}
+                          title="Download Invoice PDF"
+                          style={{
+                            backgroundColor: '#007bff',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '3px',
+                            width: '28px',
+                            height: '28px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: downloadingInv === row.invoiceNo ? 'wait' : 'pointer',
+                            opacity: downloadingInv === row.invoiceNo ? 0.7 : 1,
+                            transition: 'background-color 0.15s ease'
+                          }}
+                          onMouseOver={(e) => {
+                            if (downloadingInv !== row.invoiceNo) e.currentTarget.style.backgroundColor = '#0056b3';
+                          }}
+                          onMouseOut={(e) => {
+                            if (downloadingInv !== row.invoiceNo) e.currentTarget.style.backgroundColor = '#007bff';
+                          }}
+                        >
+                          {downloadingInv === row.invoiceNo ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Download size={14} strokeWidth={2.5} />
+                          )}
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -99,10 +99,11 @@ export default function NewDonationReceiptPage({ user }) {
       const uEmail = (activeUser?.email || '').toLowerCase().trim();
       const profile = uEmail ? JSON.parse(localStorage.getItem(`profile_data_${uEmail}`) || '{}') : {};
       if (profile.receiptPrefix) {
-        return `${profile.receiptPrefix}${profile.receiptStartNumber || '1'}`;
+        const rawP = profile.receiptPrefix.endsWith('/') ? profile.receiptPrefix : `${profile.receiptPrefix}/`;
+        return `${rawP}${profile.receiptStartNumber || '1'}`;
       }
-      const tName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || profile.name || (!isSuperUser(activeUser) ? activeUser?.name : '');
-      const prefix = tName ? tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() : 'REC';
+      const tName = activeUser?.trustName || profile.trustName || (profile.name && profile.name !== profile.contactPerson && profile.name !== profile.signatoryName ? profile.name : '') || (!isSuperUser(activeUser) && activeUser?.name !== activeUser?.contactPerson ? activeUser?.name : '');
+      const prefix = tName && tName !== 'DONATION RECEIPT SUPER ADMIN' ? tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() : 'REC';
       return `${prefix}/2026-27/1`;
     } catch (e) {}
     return 'REC/2026-27/1';
@@ -176,13 +177,14 @@ export default function NewDonationReceiptPage({ user }) {
   useEffect(() => {
     const activeUser = isSuperAdmin ? (user || {}) : activeTrustUser;
     const uEmail = (activeUser?.email || '').toLowerCase().trim();
-    let tName = (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') || (!isSuperUser(activeUser) ? activeUser?.name : '');
+    let tName = activeUser?.trustName || (!isSuperUser(activeUser) && activeUser?.name !== activeUser?.contactPerson ? activeUser?.name : '');
     let pPrefix = '';
     let pStart = '';
     try {
       if (uEmail) {
         const p = JSON.parse(localStorage.getItem(`profile_data_${uEmail}`) || '{}');
-        if (p.name) tName = p.name;
+        if (p.trustName) tName = p.trustName;
+        else if (p.name && p.name !== p.contactPerson && p.name !== p.signatoryName) tName = p.name;
         if (p.receiptPrefix) pPrefix = p.receiptPrefix;
         if (p.receiptStartNumber) pStart = p.receiptStartNumber;
       }

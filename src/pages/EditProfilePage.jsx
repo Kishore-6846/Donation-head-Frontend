@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SimplePopup from '../components/SimplePopup';
 import VerificationDemoModal from '../components/VerificationDemoModal';
-import { ChevronUp, AlertTriangle, AlertCircle, CheckCircle2, Sparkles, User, Trash2 } from 'lucide-react';
+import { ChevronUp, AlertTriangle, AlertCircle, CheckCircle2, Sparkles, User, Trash2, Eye, EyeOff, Mail } from 'lucide-react';
 import { getCurrentUser, isSuperUser, getSuperAdminSession, getTrustSession, setSuperAdminSession, setTrustSession } from '../utils/authStorage';
 
 export default function EditProfilePage({ user, onUpdateUser }) {
@@ -72,7 +72,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
 
     const tName = isSuperAdmin
       ? (savedUser?.trustName || savedUser?.name || 'DONATION RECEIPT SUPER ADMIN')
-      : ((savedUser?.trustName && savedUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? savedUser.trustName : '') || (savedUser?.name && !isSuperUser(savedUser) ? savedUser.name : '') || '');
+      : ((savedUser?.trustName && savedUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? savedUser.trustName : '') || (savedUser?.name && !isSuperUser(savedUser) && savedUser.name !== savedUser.contactPerson && savedUser.name !== savedUser.signatoryName ? savedUser.name : '') || (savedUser?.name && !isSuperUser(savedUser) ? savedUser.name : '') || '');
     const rawPrefix = tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'REC';
     const cPerson = isSuperAdmin
       ? (savedUser?.contactPerson || savedUser?.name || 'Super Administrator')
@@ -81,6 +81,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
 
     const baseData = {
       name: tName,
+      trustName: tName,
       email: savedUser?.email || (isSuperAdmin ? 'admin@donationreceipt.in' : ''),
       phone: savedUser?.mobile || savedUser?.phone || '',
       address: savedUser?.address || '',
@@ -112,7 +113,14 @@ export default function EditProfilePage({ user, onUpdateUser }) {
         ? savedUser.receiptWatermarkText
         : rawPrefix,
       logo: savedUser?.logo || '',
-      signature: savedUser?.signature || ''
+      signature: savedUser?.signature || '',
+
+      // Dynamic per-admin SMTP email fields
+      smtpEmail: savedUser?.smtpEmail || savedUser?.email || '',
+      smtpPassword: savedUser?.smtpPassword || '',
+      smtpHost: savedUser?.smtpHost || 'smtp.gmail.com',
+      smtpPort: savedUser?.smtpPort !== undefined ? String(savedUser.smtpPort) : '465',
+      smtpService: savedUser?.smtpService || 'gmail'
     };
 
     const userEmail = (savedUser?.email || '').toLowerCase().trim();
@@ -135,6 +143,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
   };
 
   const [formData, setFormData] = useState(getInitialFormData);
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
 
   useEffect(() => {
     const initial = getInitialFormData();
@@ -155,7 +164,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
             if (u && (u.email || u.name || u.trustName)) {
               if (isSuperUser(u)) return; // Strictly ignore superadmin data for Trust
 
-              const tName = u.trustName || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || '';
+              const tName = u.trustName || (u.name && !u.name.toLowerCase().includes('super') && u.name !== u.contactPerson && u.name !== u.signatoryName ? u.name : '') || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || '';
               const rawPrefix = tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'REC';
               const cPerson = u.contactPerson || (u.name && !u.name.toLowerCase().includes('super') ? u.name : '') || '';
               const parts = cPerson ? cPerson.split(' ') : [];
@@ -163,6 +172,7 @@ export default function EditProfilePage({ user, onUpdateUser }) {
               setFormData(prev => ({
                 ...prev,
                 name: tName || prev.name,
+                trustName: tName || prev.trustName,
                 email: u.email || prev.email,
                 phone: u.mobile || u.phone || prev.phone,
                 address: u.address || prev.address,
@@ -187,6 +197,11 @@ export default function EditProfilePage({ user, onUpdateUser }) {
                 receiptPrefix: u.receiptPrefix !== undefined ? u.receiptPrefix : prev.receiptPrefix,
                 receiptStartNumber: u.receiptStartNumber !== undefined ? String(u.receiptStartNumber) : prev.receiptStartNumber,
                 receiptWatermarkText: u.receiptWatermarkText !== undefined ? u.receiptWatermarkText : prev.receiptWatermarkText,
+                smtpEmail: u.smtpEmail !== undefined ? u.smtpEmail : prev.smtpEmail,
+                smtpPassword: u.smtpPassword !== undefined ? u.smtpPassword : prev.smtpPassword,
+                smtpHost: u.smtpHost !== undefined ? u.smtpHost : prev.smtpHost,
+                smtpPort: u.smtpPort !== undefined ? String(u.smtpPort) : prev.smtpPort,
+                smtpService: u.smtpService !== undefined ? u.smtpService : prev.smtpService,
                 logo: u.logo || prev.logo || '',
                 signature: u.signature || prev.signature || ''
               }));
@@ -217,6 +232,23 @@ export default function EditProfilePage({ user, onUpdateUser }) {
     if (name === 'contactPerson' || name === 'firstName' || name === 'surname') {
       const cleanName = value.replace(/[^a-zA-Z\s]/g, '');
       setFormData(prev => ({ ...prev, [name]: cleanName }));
+      return;
+    }
+    if (name === 'name') {
+      const cleanTName = value;
+      const rawP = cleanTName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
+      setFormData(prev => {
+        const oldPrefixHead = (prev.name || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
+        const currentPrefixHead = (prev.receiptPrefix || '').split('/')[0].toUpperCase();
+        const shouldUpdatePrefix = !prev.receiptPrefix || currentPrefixHead === oldPrefixHead || currentPrefixHead === 'REC';
+        return {
+          ...prev,
+          name: cleanTName,
+          trustName: cleanTName,
+          receiptPrefix: shouldUpdatePrefix && rawP ? `${rawP}/2026-27/` : prev.receiptPrefix,
+          receiptWatermarkText: shouldUpdatePrefix && rawP ? rawP : prev.receiptWatermarkText
+        };
+      });
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -419,6 +451,11 @@ export default function EditProfilePage({ user, onUpdateUser }) {
       receiptPrefix: formData.receiptPrefix !== undefined ? formData.receiptPrefix : '',
       receiptStartNumber: formData.receiptStartNumber !== undefined ? String(formData.receiptStartNumber) : '1',
       receiptWatermarkText: formData.receiptWatermarkText !== undefined ? formData.receiptWatermarkText : '',
+      smtpEmail: (formData.smtpEmail || '').trim(),
+      smtpPassword: (formData.smtpPassword || '').trim(),
+      smtpHost: (formData.smtpHost || 'smtp.gmail.com').trim(),
+      smtpPort: Number(formData.smtpPort) || 465,
+      smtpService: formData.smtpService || 'gmail',
       isSuperAdmin: isSuperAdmin,
       role: isSuperAdmin ? 'SuperAdmin' : (existingUser.role || 'Admin')
     };
@@ -979,7 +1016,98 @@ export default function EditProfilePage({ user, onUpdateUser }) {
             </div>
           </div>
 
-          {/* ================= SECTION 5: RECEIPT SETTINGS ================= */}
+          {/* ================= SECTION 5: OUTGOING EMAIL & SMTP SETTINGS ================= */}
+          <div style={{ marginBottom: '26px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '700', textDecoration: 'underline', color: '#111', margin: 0 }}>
+                Outgoing Email & SMTP Settings: (Dynamic per Admin)
+              </h3>
+              <span style={{ fontSize: '11.5px', background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '10px', fontWeight: '700' }}>
+                Direct Dispatch
+              </span>
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '14px', lineHeight: '1.5' }}>
+              Configure your own Gmail or SMTP email credentials below so that all 80G tax receipts and attached PDFs are dispatched directly from <strong>your trust's own email address</strong> to donors.
+            </p>
+
+            <div className="edit-profile-row-4col" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Sender Email / Gmail ID:</label>
+                <input
+                  type="email"
+                  name="smtpEmail"
+                  className="form-control"
+                  placeholder="e.g. maharajatrust@gmail.com"
+                  value={formData.smtpEmail || ''}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>Gmail App Password / SMTP Password:</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showSmtpPassword ? 'text' : 'password'}
+                    name="smtpPassword"
+                    className="form-control"
+                    placeholder="16-digit App Password"
+                    value={formData.smtpPassword || ''}
+                    onChange={handleChange}
+                    style={{ paddingRight: '36px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSmtpPassword(p => !p)}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#64748b',
+                      cursor: 'pointer',
+                      padding: '4px'
+                    }}
+                    title={showSmtpPassword ? 'Hide Password' : 'Show Password'}
+                  >
+                    {showSmtpPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>SMTP Host Server:</label>
+                <input
+                  type="text"
+                  name="smtpHost"
+                  className="form-control"
+                  placeholder="smtp.gmail.com"
+                  value={formData.smtpHost || 'smtp.gmail.com'}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div>
+                <label className="form-label" style={{ fontSize: '12.5px' }}>SMTP Port:</label>
+                <input
+                  type="number"
+                  name="smtpPort"
+                  className="form-control"
+                  placeholder="465 or 587"
+                  value={formData.smtpPort || '465'}
+                  onChange={handleChange}
+                />
+              </div>
+            </div>
+
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '10px 14px', fontSize: '12px', color: '#166534', marginTop: '14px', lineHeight: '1.5' }}>
+              <strong>💡 Quick Google Gmail Setup (1 minute):</strong> Enable 2-Step Verification on your Gmail &rarr; Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{ color: '#15803d', fontWeight: '700', textDecoration: 'underline' }}>Google App Passwords</a> &rarr; Generate an App Password named "Donation Receipt" &rarr; Paste the 16-letter password here.
+            </div>
+          </div>
+
+          {/* ================= SECTION 6: RECEIPT SETTINGS ================= */}
           <div style={{ marginBottom: '32px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: '700', textDecoration: 'underline', color: '#111', marginBottom: '12px' }}>
               Receipt Settings:

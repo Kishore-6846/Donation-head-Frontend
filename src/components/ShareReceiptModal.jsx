@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Send, Download, Check, AlertCircle, X, FileText, Share2, Copy } from 'lucide-react';
+import { Mail, Send, Download, Check, AlertCircle, X, FileText } from 'lucide-react';
 
 export default function ShareReceiptModal({
   isOpen,
@@ -16,7 +16,6 @@ export default function ShareReceiptModal({
   const [recipientPhone, setRecipientPhone] = useState(receipt.phone || receipt.mobile || '');
   const [sending, setSending] = useState(false);
   const [statusMsg, setStatusMsg] = useState(null); // { type: 'success' | 'error', text: '' }
-  const [copied, setCopied] = useState(false);
 
   const effectiveTrustName = trustName || receipt.trustName || 'Trust Organization';
   const safeReceiptNo = String(receipt.receiptNo || 'Receipt').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -24,6 +23,7 @@ export default function ShareReceiptModal({
 
   const pdfUrl = `${window.location.origin}/api/receipts/pdf?receiptNo=${encodeURIComponent(receipt.receiptNo || '')}${trustEmail ? `&trustEmail=${encodeURIComponent(trustEmail)}` : ''}${trustName ? `&trustName=${encodeURIComponent(trustName)}` : ''}`;
 
+  // Manual download function (triggered only when user clicks the Download button at top)
   const downloadPdf = async () => {
     try {
       const res = await fetch(pdfUrl);
@@ -37,10 +37,9 @@ export default function ShareReceiptModal({
       link.click();
       document.body.removeChild(link);
       setTimeout(() => window.URL.revokeObjectURL(fileUrl), 5000);
-      return new File([blob], pdfFilename, { type: 'application/pdf' });
     } catch (e) {
       console.warn('Error downloading PDF:', e);
-      return null;
+      setStatusMsg({ type: 'error', text: 'Failed to download PDF. Please try again.' });
     }
   };
 
@@ -52,9 +51,6 @@ export default function ShareReceiptModal({
 
     setSending(true);
     setStatusMsg(null);
-
-    // Also download PDF locally so user has it immediately
-    downloadPdf();
 
     try {
       const resp = await fetch('/api/receipts/send-email', {
@@ -74,21 +70,19 @@ export default function ShareReceiptModal({
       if (resp.ok && data.success) {
         setStatusMsg({
           type: 'success',
-          text: `80G Receipt PDF (${pdfFilename}) successfully attached and sent to ${recipientEmail}!`
+          text: `Official 80G Receipt PDF (${pdfFilename}) successfully attached and sent to ${recipientEmail}!`
         });
       } else {
         setStatusMsg({
           type: 'error',
-          text: data.message || 'Failed to send email. Opening default mail client...'
+          text: data.message || 'Failed to send email. Please check your email configuration or use the Mail App button.'
         });
-        openMailClient();
       }
     } catch (err) {
       setStatusMsg({
         type: 'error',
-        text: 'Network error sending email. Opening default mail client...'
+        text: 'Error sending email: ' + (err.message || 'Network error')
       });
-      openMailClient();
     } finally {
       setSending(false);
     }
@@ -97,71 +91,55 @@ export default function ShareReceiptModal({
   const openMailClient = () => {
     const subject = encodeURIComponent(`Official 80G Donation Receipt - ${receipt.receiptNo} | ${effectiveTrustName}`);
     const body = encodeURIComponent(
-      `Dear ${receipt.donorName},\n\nThank you for your generous donation of ₹${Number(receipt.amount).toFixed(2)} to ${effectiveTrustName} under head "${receipt.donationHead}".\n\nReceipt Details:\n• Receipt Number: ${receipt.receiptNo}\n• Receipt Date: ${receipt.receiptDate}\n• Donation Head: ${receipt.donationHead}\n• Amount: ₹${Number(receipt.amount).toFixed(2)}\n\nYou can view and download your 80G Donation Receipt PDF here:\n${pdfUrl}\n\n📎 Attached File: ${pdfFilename}\n\nThank you for supporting our mission!\n\nWarm regards,\n${effectiveTrustName}`
+      `Dear ${receipt.donorName},\n\nThank you for your generous donation of ₹${Number(receipt.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} to ${effectiveTrustName} under head "${receipt.donationHead || 'General'}".\n\nReceipt Details:\n• Receipt Number: ${receipt.receiptNo}\n• Receipt Date: ${receipt.receiptDate}\n• Donation Head: ${receipt.donationHead || 'General'}\n• Amount: ₹${Number(receipt.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\nYou can view and download your official 80G Donation Receipt PDF directly here:\n${pdfUrl}\n\n📎 Attached Document: ${pdfFilename}\n\nThank you for supporting our noble mission!\n\nWarm regards,\n${effectiveTrustName}`
     );
     window.location.href = `mailto:${encodeURIComponent(recipientEmail)}?subject=${subject}&body=${body}`;
   };
 
-  const handleSendWhatsApp = async () => {
+  const handleSendWhatsApp = () => {
     if (!recipientPhone.trim()) {
       setStatusMsg({ type: 'error', text: 'Please enter a valid mobile number.' });
       return;
     }
 
     const digitsOnly = recipientPhone.replace(/\D/g, '');
-    const phone = digitsOnly.startsWith('91') && digitsOnly.length > 10 ? digitsOnly : `91${digitsOnly}`;
+    if (!digitsOnly) {
+      setStatusMsg({ type: 'error', text: 'Please enter a valid phone number with digits.' });
+      return;
+    }
 
-    // 1. Download PDF file to device
-    const pdfFile = await downloadPdf();
+    const phone = digitsOnly.startsWith('91') && digitsOnly.length > 10
+      ? digitsOnly
+      : (digitsOnly.length === 10 ? `91${digitsOnly}` : digitsOnly);
 
     const messageText =
       `🙏 *Official 80G Donation Receipt - ${effectiveTrustName}*\n\n` +
-      `Dear *${receipt.donorName}*,\n\n` +
-      `Thank you for your generous contribution of *₹${Number(receipt.amount).toFixed(2)}* to *${effectiveTrustName}* under head "*${receipt.donationHead}*".\n\n` +
+      `Dear *${receipt.donorName || 'Donor'}*,\n\n` +
+      `Thank you for your generous contribution of *₹${Number(receipt.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}* to *${effectiveTrustName}* under head "*${receipt.donationHead || 'General'}*".\n\n` +
       `📋 *Receipt Details:*\n` +
       `• *Receipt No:* ${receipt.receiptNo}\n` +
       `• *Receipt Date:* ${receipt.receiptDate}\n` +
-      `• *Donation Head:* ${receipt.donationHead}\n` +
-      `• *Amount:* ₹${Number(receipt.amount).toFixed(2)}\n\n` +
-      `📄 *Direct 80G Receipt PDF Link:* \n${pdfUrl}\n\n` +
-      `📎 *Attached File:* ${pdfFilename}\n\n` +
+      `• *Donation Head:* ${receipt.donationHead || 'General'}\n` +
+      `• *Amount:* ₹${Number(receipt.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\n` +
+      `📄 *Direct 80G Tax Exemption Receipt PDF Link:* \n${pdfUrl}\n\n` +
       `Thank you for supporting our noble mission! ✨\n` +
       `— *${effectiveTrustName}*`;
 
-    // 2. Try Native Web Share API if device supports sharing files directly (Mobile / Edge)
-    if (pdfFile && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      try {
-        await navigator.share({
-          files: [pdfFile],
-          title: `Donation Receipt - ${receipt.receiptNo}`,
-          text: messageText
-        });
-        setStatusMsg({
-          type: 'success',
-          text: `Receipt PDF attached and shared via native sharing!`
-        });
-        return;
-      } catch (shareErr) {
-        if (shareErr.name !== 'AbortError') {
-          console.warn('Native share failed, opening WhatsApp Web:', shareErr);
-        }
-      }
-    }
-
-    // 3. Open WhatsApp Web / App
     const text = encodeURIComponent(messageText);
-    window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${text}`, '_blank');
+    const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${text}`;
+
+    // Directly open WhatsApp window so browser popup blocker does not block it
+    const win = window.open(waUrl, '_blank');
+    if (win) {
+      win.focus();
+    } else {
+      window.location.href = waUrl;
+    }
 
     setStatusMsg({
       type: 'success',
-      text: `PDF downloaded to your device! WhatsApp is opened with donor details. Drag & drop the downloaded PDF (${pdfFilename}) into WhatsApp to send.`
+      text: `WhatsApp chat opened for ${recipientPhone} with official 80G receipt details and direct PDF link!`
     });
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(pdfUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
   };
 
   return (
@@ -264,7 +242,7 @@ export default function ShareReceiptModal({
 
         {/* Modal Body */}
         <div style={{ padding: '22px' }}>
-          {/* PDF Attachment Badge */}
+          {/* PDF Attachment Preview Card with Manual Download Button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', marginBottom: '18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <FileText size={20} color="#15803d" />
@@ -316,10 +294,8 @@ export default function ShareReceiptModal({
               </div>
 
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '18px', fontSize: '12.5px', color: '#475569', lineHeight: '1.5' }}>
-                <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>How WhatsApp PDF Attachment works:</div>
-                <div>1. Clicking below will <strong>automatically download the PDF</strong> (<code>{pdfFilename}</code>) to your device.</div>
-                <div>2. WhatsApp Web / App will open with the donor chat and direct link.</div>
-                <div>3. Simply drag & drop the downloaded PDF (or click 📎 Document) to send the file directly to the donor!</div>
+                <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>Instant WhatsApp Receipt Dispatch:</div>
+                <div>Clicking below will open WhatsApp with <strong>{receipt.donorName || 'Donor'}</strong> ({recipientPhone || 'Phone'}) to deliver the official 80G Receipt message and direct PDF link.</div>
               </div>
 
               <button
@@ -345,12 +321,17 @@ export default function ShareReceiptModal({
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
                 </svg>
-                Open WhatsApp & Attach PDF
+                Open WhatsApp & Share Receipt
               </button>
             </div>
           ) : (
             <div>
               <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontSize: '12px', color: '#166534', background: '#f0fdf4', padding: '7px 12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>📧 <strong>Sender Identity:</strong> {effectiveTrustName} ({trustEmail || receipt.trustEmail || 'Trust Admin'})</span>
+                  <span style={{ fontSize: '11px', background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: '10px', fontWeight: '700' }}>Dynamic</span>
+                </div>
+
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>
                   Donor Email Address:
                 </label>
@@ -365,7 +346,7 @@ export default function ShareReceiptModal({
 
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '18px', fontSize: '12.5px', color: '#475569', lineHeight: '1.5' }}>
                 <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>Official Email Dispatch:</div>
-                <div>The backend server will generate the 80G Receipt PDF buffer and <strong>attach it directly to the email</strong> (<code>{pdfFilename}</code>) delivered straight to the donor's inbox.</div>
+                <div>The server generates the official 80G Receipt PDF buffer and <strong>attaches it directly to the email</strong> (<code>{pdfFilename}</code>) for the donor's tax records.</div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
@@ -442,29 +423,6 @@ export default function ShareReceiptModal({
               <div>{statusMsg.text}</div>
             </div>
           )}
-
-          {/* Quick Direct Link Copy */}
-          <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
-            <span>Need direct PDF link?</span>
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: copied ? '#15803d' : '#2563eb',
-                fontWeight: '600',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '12px'
-              }}
-            >
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-              {copied ? 'Link Copied!' : 'Copy PDF Link'}
-            </button>
-          </div>
         </div>
       </div>
     </div>

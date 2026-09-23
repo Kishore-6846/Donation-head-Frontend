@@ -19,7 +19,7 @@ export default function NewPlanPage() {
     billingCycle: 'Annual',
     validityDays: '365',
     receiptLimit: 'Unlimited Receipts',
-    staffUserLimit: '4 Staff Users',
+    staffUsersCount: '4',
     features: 'Unlimited Donation Receipts\n4 Staff User Logins\nWhatsApp Receipt Sharing\nForm No. 10BD Compliance Reports\n80G Tax Exemption Certificates',
     badge: '',
     description: '',
@@ -42,14 +42,27 @@ export default function NewPlanPage() {
         .then(d => {
           if (d.success && d.data) {
             const p = d.data;
+            const staffMatch = String(p.staffUserLimit || '').match(/\d+/);
+            const staffNum = staffMatch ? staffMatch[0] : '4';
+
+            // Normalize receipt limit to match dropdown values
+            let recLimit = p.receiptLimit || 'Unlimited Receipts';
+            const rLower = String(recLimit).toLowerCase().replace(/,/g, '');
+            if (rLower.includes('unlimited')) recLimit = 'Unlimited Receipts';
+            else if (rLower.includes('500') && !rLower.includes('5000')) recLimit = '500 Receipts';
+            else if (rLower.includes('1000') && !rLower.includes('10000')) recLimit = '1,000 Receipts';
+            else if (rLower.includes('3000')) recLimit = '3,000 Receipts';
+            else if (rLower.includes('5000')) recLimit = '5,000 Receipts';
+            else if (rLower.includes('10000')) recLimit = '10,000 Receipts';
+
             setFormData({
               name: p.name || '',
               code: p.code || '',
               price: p.price !== undefined ? String(p.price) : '',
               billingCycle: p.billingCycle || 'Annual',
               validityDays: String(p.validityDays || 365),
-              receiptLimit: p.receiptLimit || 'Unlimited Receipts',
-              staffUserLimit: p.staffUserLimit || '4 Staff Users',
+              receiptLimit: recLimit,
+              staffUsersCount: staffNum,
               features: Array.isArray(p.features) ? p.features.join('\n') : (p.features || ''),
               badge: p.badge || '',
               description: p.description || '',
@@ -67,6 +80,28 @@ export default function NewPlanPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleBillingCycleChange = (e) => {
+    const cycle = e.target.value;
+    let days = formData.validityDays;
+    if (cycle === 'Annual') {
+      days = '365';
+    } else if (cycle === 'Half-Yearly' || cycle === 'Half-Yearly (6 Months)') {
+      days = '182';
+    } else if (cycle === 'Quarterly' || cycle === 'Quarterly (3 Months)') {
+      days = '90';
+    } else if (cycle === 'Monthly' || cycle === 'Monthly (1 Month)') {
+      days = '30';
+    } else if (cycle === 'Lifetime') {
+      days = '3650';
+    }
+    // If Custom, preserve existing validityDays
+    setFormData(prev => ({
+      ...prev,
+      billingCycle: cycle,
+      validityDays: days
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim() || formData.price === '') {
@@ -80,15 +115,25 @@ export default function NewPlanPage() {
       return;
     }
 
+    const staffNum = parseInt(formData.staffUsersCount, 10) || 1;
+    const staffUserLimit = `${staffNum} Staff User${staffNum > 1 ? 's' : ''}`;
+
     setIsSubmitting(true);
     try {
       const url = editId ? `/api/plans/${editId}` : '/api/plans';
       const method = editId ? 'PUT' : 'POST';
 
       const payload = {
-        ...formData,
+        name: formData.name.trim(),
+        code: formData.code.trim(),
         price: Number(formData.price),
+        billingCycle: formData.billingCycle,
         validityDays: Number(formData.validityDays) || 365,
+        receiptLimit: formData.receiptLimit,
+        staffUserLimit: staffUserLimit,
+        badge: formData.badge.trim(),
+        description: formData.description.trim(),
+        status: formData.status,
         features: formData.features.split('\n').map(f => f.trim()).filter(Boolean)
       };
 
@@ -240,12 +285,14 @@ export default function NewPlanPage() {
                 <select
                   name="billingCycle"
                   value={formData.billingCycle}
-                  onChange={handleChange}
+                  onChange={handleBillingCycleChange}
                   style={inputStyle}
                 >
-                  <option value="Annual">Annual (1 Year)</option>
-                  <option value="Monthly">Monthly</option>
-                  <option value="Quarterly">Quarterly (3 Months)</option>
+                  <option value="Annual">Annual (1 Year - 365 Days)</option>
+                  <option value="Half-Yearly">Half-Yearly (6 Months - 182 Days)</option>
+                  <option value="Quarterly">Quarterly (3 Months - 90 Days)</option>
+                  <option value="Monthly">Monthly (1 Month - 30 Days)</option>
+                  <option value="Custom">Custom Duration</option>
                   <option value="Lifetime">Lifetime Access</option>
                 </select>
               </div>
@@ -256,10 +303,24 @@ export default function NewPlanPage() {
                   type="number"
                   name="validityDays"
                   value={formData.validityDays}
-                  onChange={handleChange}
-                  placeholder="365"
+                  readOnly={formData.billingCycle !== 'Custom'}
+                  onChange={(e) => {
+                    if (formData.billingCycle === 'Custom') {
+                      setFormData(prev => ({
+                        ...prev,
+                        validityDays: e.target.value
+                      }));
+                    }
+                  }}
+                  placeholder="e.g. 365, 500"
                   min="1"
-                  style={inputStyle}
+                  style={{
+                    ...inputStyle,
+                    backgroundColor: formData.billingCycle === 'Custom' ? '#ffffff' : '#f8fafc',
+                    color: formData.billingCycle === 'Custom' ? '#0f172a' : '#64748b',
+                    cursor: formData.billingCycle === 'Custom' ? 'text' : 'not-allowed',
+                    borderColor: formData.billingCycle === 'Custom' ? '#cbd5e1' : '#e2e8f0'
+                  }}
                 />
               </div>
 
@@ -281,24 +342,40 @@ export default function NewPlanPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', marginBottom: '18px' }}>
               <div>
                 <label style={labelStyle}>Receipt Quota</label>
-                <input
-                  type="text"
+                <select
                   name="receiptLimit"
                   value={formData.receiptLimit}
                   onChange={handleChange}
-                  placeholder="e.g. Unlimited Receipts, 1,000 / year"
                   style={inputStyle}
-                />
+                >
+                  <option value="Unlimited Receipts">Unlimited Receipts</option>
+                  <option value="500 Receipts">500 Receipts</option>
+                  <option value="1,000 Receipts">1,000 Receipts</option>
+                  <option value="3,000 Receipts">3,000 Receipts</option>
+                  <option value="5,000 Receipts">5,000 Receipts</option>
+                  <option value="10,000 Receipts">10,000 Receipts</option>
+                </select>
               </div>
 
               <div>
-                <label style={labelStyle}>Staff User Limit</label>
+                <label style={labelStyle}>
+                  Staff Users Limit
+                </label>
                 <input
-                  type="text"
-                  name="staffUserLimit"
-                  value={formData.staffUserLimit}
-                  onChange={handleChange}
-                  placeholder="e.g. 4 Staff Users, 10 Staff Users"
+                  type="number"
+                  name="staffUsersCount"
+                  value={formData.staffUsersCount}
+                  onChange={(e) => {
+                    const num = e.target.value;
+                    setFormData(prev => ({
+                      ...prev,
+                      staffUsersCount: num
+                    }));
+                  }}
+                  placeholder="e.g. 1, 2, 4, 10"
+                  min="1"
+                  step="1"
+                  required
                   style={inputStyle}
                 />
               </div>

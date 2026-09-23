@@ -38,7 +38,7 @@ export default function MyProfilePage({ user }) {
     if (!u) u = {};
     const tName = isSuperAdmin
       ? (u.trustName || u.name || 'DONATION RECEIPT SUPER ADMIN')
-      : ((u.trustName && u.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? u.trustName : '') || (u.name && !isSuperUser(u) ? u.name : '') || 'Trust Organization');
+      : ((u.trustName && u.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? u.trustName : '') || (u.name && !isSuperUser(u) && u.name !== u.contactPerson && u.name !== u.signatoryName ? u.name : '') || (u.name && !isSuperUser(u) ? u.name : '') || 'Trust Organization');
     const rawPrefix = tName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'REC';
     const cPerson = isSuperAdmin
       ? (u.contactPerson || u.name || 'Super Administrator')
@@ -72,7 +72,14 @@ export default function MyProfilePage({ user }) {
       receiptStartNumber: u.receiptStartNumber || '1',
       receiptWatermarkText: (u.receiptWatermarkText !== undefined && u.receiptWatermarkText !== null)
         ? u.receiptWatermarkText
-        : rawPrefix
+        : rawPrefix,
+
+      // Dynamic per-admin SMTP email fields
+      smtpEmail: u.smtpEmail || u.email || '',
+      smtpPassword: u.smtpPassword || '',
+      smtpHost: u.smtpHost || 'smtp.gmail.com',
+      smtpPort: u.smtpPort || 465,
+      smtpService: u.smtpService || 'gmail'
     };
   };
 
@@ -334,6 +341,23 @@ export default function MyProfilePage({ user }) {
                   <td style={{ padding: '12px 16px', fontWeight: '500', color: '#333', verticalAlign: 'top' }}>Email Body</td>
                   <td style={{ padding: '12px 16px', color: '#333', lineHeight: '1.55', whiteSpace: 'pre-line' }}>
                     {profileData.emailBody}
+                  </td>
+                </tr>
+
+                {/* Outgoing Sender Email (Dynamic per Admin) */}
+                <tr style={{ borderBottom: '1px solid #f1f3f5', background: '#f0fdf4' }}>
+                  <td style={{ padding: '12px 16px', fontWeight: '600', color: '#166534' }}>Outgoing Dispatch Email</td>
+                  <td style={{ padding: '12px 16px', color: '#166534', fontWeight: '500' }}>
+                    {profileData.smtpEmail || profileData.email || 'Not configured'}
+                    {profileData.smtpPassword ? (
+                      <span style={{ marginLeft: '8px', fontSize: '11px', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>
+                        ✓ Custom Gmail / SMTP Active
+                      </span>
+                    ) : (
+                      <span style={{ marginLeft: '8px', fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '10px', fontWeight: '600' }}>
+                        Platform Default
+                      </span>
+                    )}
                   </td>
                 </tr>
 

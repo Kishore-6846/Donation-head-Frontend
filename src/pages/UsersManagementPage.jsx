@@ -546,7 +546,32 @@ export default function UsersManagementPage() {
                       </span>
                     </td>
                     <td style={{ fontWeight: 600, color: '#0f172a', textAlign: 'center' }}>{u.receiptsCount || 0}</td>
-                    <td style={{ fontWeight: 600, color: '#10b981', textAlign: 'center' }}>{u.staffCount || 0}</td>
+                    <td style={{ textAlign: 'center', fontSize: '13px' }}>
+                      {(() => {
+                        const planName = (u.plan || 'Standard').toLowerCase();
+                        const baseLimit = u.baseStaffLimit !== undefined
+                          ? u.baseStaffLimit
+                          : (planName.includes('basic') || planName.includes('starter') ? 1 : (planName.includes('advanced') ? 9 : (planName.includes('enterprise') || planName.includes('unlimited') ? 999 : 2)));
+
+                        const extra = Number(u.extraStaffUsers || u.purchasedStaffUsers || 0);
+                        const created = Number(u.createdStaffCount !== undefined ? u.createdStaffCount : (u.staffCount || 0));
+                        const totalStaff = baseLimit === 999 ? 'Unlimited' : Math.max(created, baseLimit + extra);
+                        const hasExtra = extra > 0 || (baseLimit !== 999 && totalStaff > baseLimit);
+
+                        if (baseLimit === 999) {
+                          return <span style={{ fontWeight: 600, color: '#10b981' }}>{created} / ∞</span>;
+                        }
+
+                        return (
+                          <span style={{ fontWeight: 600 }}>
+                            <span style={{ color: hasExtra ? '#ef4444' : '#10b981', fontWeight: 700 }}>
+                              {totalStaff}
+                            </span>
+                            <span style={{ color: '#64748b' }}>/{baseLimit}</span>
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td style={{ fontSize: '13px', color: '#64748b' }}>{u.joinedDate || '10/01/2026'}</td>
                     <td>
                       {isPending ? (

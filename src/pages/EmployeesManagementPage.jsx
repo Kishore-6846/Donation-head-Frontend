@@ -302,10 +302,10 @@ export default function EmployeesManagementPage() {
         <div className="stat-modern-card card-purple">
           <div className="stat-modern-top">
             <div className="stat-modern-icon"><ShieldCheck size={22} /></div>
-            <span className="stat-modern-val">{employees.filter(e => e.role.toLowerCase().includes('admin')).length}</span>
+            <span className="stat-modern-val">{employees.filter(e => (e.role || '').toLowerCase().includes('manager') || (e.role || '').toLowerCase().includes('lead') || (e.role || '').toLowerCase().includes('auditor')).length}</span>
           </div>
           <div className="stat-modern-bottom">
-            <span className="stat-modern-title">Administrators</span>
+            <span className="stat-modern-title">Operations Leads</span>
           </div>
         </div>
       </div>
@@ -331,11 +331,11 @@ export default function EmployeesManagementPage() {
             onChange={(e) => setRoleFilter(e.target.value)}
           >
             <option value="All">All Roles</option>
-            <option value="Super Administrator">Super Administrator</option>
-            <option value="Support Lead">Support Lead</option>
             <option value="Support Executive">Support Executive</option>
-            <option value="Billing & Accounts Manager">Billing &amp; Accounts</option>
-            <option value="Technical Operations">Technical Operations</option>
+            <option value="Platform Manager">Platform Manager</option>
+            <option value="Compliance Auditor">Compliance Auditor</option>
+            <option value="Technical Lead">Technical Lead</option>
+            <option value="Operations Executive">Operations Executive</option>
           </select>
           <select
             className="trust-select"
@@ -373,7 +373,7 @@ export default function EmployeesManagementPage() {
           <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
             No team members matched the current search criteria.
           </p>
-          <button type="button" className="btn-trust-primary" onClick={handleOpenCreateModal}>
+          <button type="button" className="btn-trust-primary" onClick={() => navigate('/superadmin/new-employee')}>
             Add New Employee
           </button>
         </div>

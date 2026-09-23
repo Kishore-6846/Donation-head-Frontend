@@ -13,7 +13,8 @@ import {
   Mail,
   Shield,
   Send,
-  Sparkles
+  Sparkles,
+  FileSpreadsheet
 } from 'lucide-react';
 import { getTrustSession, isSuperUser } from '../utils/authStorage';
 
@@ -24,6 +25,8 @@ export default function DonationReceiptsPage({ user }) {
   const [heads, setHeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [headFilter, setHeadFilter] = useState('All');
+  const [paymentModeFilter, setPaymentModeFilter] = useState('All');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -43,7 +46,6 @@ export default function DonationReceiptsPage({ user }) {
     onConfirm: null,
     onCancel: null
   });
-
 
   const location = useLocation();
   const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin');
@@ -98,7 +100,7 @@ export default function DonationReceiptsPage({ user }) {
     try {
       const res = await fetch('/api/donation-heads');
       const data = await res.json();
-      if (data.success) {
+      if (data.success && Array.isArray(data.data)) {
         setHeads(data.data);
       }
     } catch (e) {
@@ -113,7 +115,6 @@ export default function DonationReceiptsPage({ user }) {
   useEffect(() => {
     fetchHeads();
   }, []);
-
 
   const handleToggleStatus = (receipt) => {
     const currentStatus = receipt.status || 'Active';
@@ -186,179 +187,66 @@ export default function DonationReceiptsPage({ user }) {
     }
   };
 
-  const handleSendWhatsApp = async (receipt) => {
-    const rawPhone = (receipt.phone || receipt.mobile || '').toString().trim();
-    if (!rawPhone) {
+  const handleExportExcel = () => {
+    const dataToExport = filtered.length > 0 ? filtered : receipts;
+    if (dataToExport.length === 0) {
       setPopup({
         isOpen: true,
-        type: 'danger',
-        title: 'Phone Number Missing',
-        message: 'No mobile or phone number is available for this donor receipt.'
+        type: 'warning',
+        title: 'No Data to Export',
+        message: 'There are no donation receipts matching your filters to export.'
       });
       return;
     }
-    const digitsOnly = rawPhone.replace(/\D/g, '');
-    const phone = digitsOnly.startsWith('91') && digitsOnly.length > 10 ? digitsOnly : `91${digitsOnly}`;
-    const currentTrustName = effectiveTrustName || user?.trustName || 'our Trust';
-    const safeNo = (receipt.receiptNo || 'Receipt').replace(/[^a-zA-Z0-9_-]/g, '_');
 
-    // 1. Download PDF to device so it's ready to attach in WhatsApp
-    const fileResult = await downloadReceiptPdfFile(receipt);
+    const headers = [
+      'S.No',
+      'Receipt No',
+      'Donor Name',
+      'Phone',
+      'Donation Type',
+      'Donation Head',
+      'Amount (INR)',
+      'Receipt Date',
+      'Payment Type',
+      'Date Created',
+      'Created By'
+    ];
 
-    const printUrl = receipt.receiptNo
-      ? `${window.location.origin}/api/receipts/pdf?receiptNo=${encodeURIComponent(receipt.receiptNo)}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`
-      : `${window.location.origin}/api/receipts/pdf?id=${encodeURIComponent(receipt._id)}`;
-
-    const messageText =
-      `🙏 *Official 80G Donation Receipt - ${currentTrustName}*\n\n` +
-      `Dear *${receipt.donorName}*,\n\n` +
-      `Thank you for your generous donation of *₹${Number(receipt.amount).toFixed(2)}* to *${currentTrustName}* under head "*${receipt.donationHead}*".\n\n` +
-      `📋 *Receipt Details:*\n` +
-      `• *Receipt No:* ${receipt.receiptNo}\n` +
-      `• *Receipt Date:* ${receipt.receiptDate}\n` +
-      `• *Donation Head:* ${receipt.donationHead}\n` +
-      `• *Amount:* ₹${Number(receipt.amount).toFixed(2)}\n\n` +
-      `📄 *Direct 80G Receipt PDF:* \n${printUrl}\n\n` +
-      `📎 *Attached File:* Official 80G Tax-Exempt Receipt PDF (Donation_Receipt_${safeNo}.pdf).\n\n` +
-      `Thank you for supporting our mission! ✨\n` +
-      `— *${currentTrustName}*`;
-
-    // 2. Try Native Web Share API with file attachment if supported
-    if (fileResult?.file && navigator.canShare && navigator.canShare({ files: [fileResult.file] })) {
-      try {
-        await navigator.share({
-          files: [fileResult.file],
-          title: `Donation Receipt - ${receipt.receiptNo}`,
-          text: messageText
-        });
-        return;
-      } catch (shareErr) {
-        if (shareErr.name !== 'AbortError') {
-          console.warn('Native share failed, opening WhatsApp Web:', shareErr);
-        }
-      }
-    }
-
-    // 3. Open WhatsApp Web/App with pre-filled message & direct PDF link
-    const text = encodeURIComponent(messageText);
-    window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${text}`, '_blank');
-  };
-
-  const handleSendEmail = async (receipt) => {
-    const email = (receipt.email || '').trim();
-    if (!email) {
-      setPopup({
-        isOpen: true,
-        type: 'danger',
-        title: 'Email Address Missing',
-        message: 'No email address is available for this donor receipt.'
-      });
-      return;
-    }
-    const currentTrustName = effectiveTrustName || user?.trustName || 'our Trust';
-    const safeNo = (receipt.receiptNo || 'Receipt').replace(/[^a-zA-Z0-9_-]/g, '_');
-
-    // 1. Download PDF to device so it is ready to attach
-    const fileResult = await downloadReceiptPdfFile(receipt);
-
-    // 2. Send email with attached PDF via backend API
-    let backendSuccess = false;
-    try {
-      const resp = await fetch('/api/receipts/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receiptId: receipt._id,
-          receiptNo: receipt.receiptNo,
-          email: email,
-          trustEmail: effectiveEmail,
-          trustName: effectiveTrustName,
-          receipt
-        })
-      });
-      const data = await resp.json();
-      if (data.success) {
-        backendSuccess = true;
-      }
-    } catch (apiErr) {
-      console.warn('Backend send-email API error:', apiErr);
-    }
-
-    const printUrl = receipt.receiptNo
-      ? `${window.location.origin}/api/receipts/pdf?receiptNo=${encodeURIComponent(receipt.receiptNo)}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`
-      : `${window.location.origin}/api/receipts/pdf?id=${encodeURIComponent(receipt._id)}`;
-
-    const subject = encodeURIComponent(`Official 80G Donation Receipt - ${receipt.receiptNo} | ${currentTrustName}`);
-    const body = encodeURIComponent(
-      `Dear ${receipt.donorName},\n\n` +
-      `Thank you for your generous donation of ₹${Number(receipt.amount).toFixed(2)} to ${currentTrustName} under head "${receipt.donationHead}".\n\n` +
-      `Receipt Details:\n` +
-      `• Receipt Number: ${receipt.receiptNo}\n` +
-      `• Receipt Date: ${receipt.receiptDate}\n` +
-      `• Donation Head: ${receipt.donationHead}\n` +
-      `• Amount: ₹${Number(receipt.amount).toFixed(2)}\n\n` +
-      `You can view and download your 80G Donation Receipt PDF here:\n${printUrl}\n\n` +
-      `📎 Attached File: Donation_Receipt_${safeNo}.pdf\n\n` +
-      `Thank you for supporting our mission!\n\n` +
-      `Warm regards,\n${currentTrustName}`
-    );
-
-    // 3. Try Native Web Share API with file attachment if supported
-    if (fileResult?.file && navigator.canShare && navigator.canShare({ files: [fileResult.file] })) {
-      try {
-        await navigator.share({
-          files: [fileResult.file],
-          title: `Donation Receipt - ${receipt.receiptNo}`,
-          text: `Dear ${receipt.donorName},\n\nPlease find your 80G Donation Receipt attached.\n\nReceipt No: ${receipt.receiptNo}\nAmount: ₹${Number(receipt.amount).toFixed(2)}\nPDF Link: ${printUrl}\n\nWarm regards,\n${currentTrustName}`
-        });
-        return;
-      } catch (shareErr) {
-        if (shareErr.name !== 'AbortError') {
-          console.warn('Native share failed, opening mailto:', shareErr);
-        }
-      }
-    }
-
-    // 4. Open mailto client as standard desktop/web action
-    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
-
-    setPopup({
-      isOpen: true,
-      type: 'success',
-      title: 'Receipt PDF Attached & Sent',
-      message: backendSuccess
-        ? `80G Receipt PDF has been attached and emailed to ${email}. The PDF file was also downloaded to your device.`
-        : `80G Receipt PDF has been downloaded to attach, and your email client has been opened with the complete receipt details and direct PDF link for ${email}.`
-    });
-  };
-
-  const handleBulkDownload = () => {
-    // Generate CSV export
-    const headers = ['Receipt No', 'Donor Name', 'Phone', 'PAN', 'Type', 'Head', 'Amount', 'Date', 'Ref', 'Created By'];
-    const rows = receipts.map(r => [
-      `"${r.receiptNo}"`,
-      `"${r.donorName}"`,
-      `"${r.phone || ''}"`,
-      `"${r.panNo || ''}"`,
-      `"${r.type || ''}"`,
-      `"${r.donationHead || ''}"`,
-      `"${r.amount}"`,
-      `"${r.receiptDate}"`,
-      `"${r.reference || ''}"`,
-      `"${r.createdBy || 'Admin'}"`
+    const rows = dataToExport.map((r, idx) => [
+      idx + 1,
+      `"${(r.receiptNo || '').replace(/"/g, '""')}"`,
+      `"${(r.donorName || '').replace(/"/g, '""')}"`,
+      `"${(r.phone || r.mobile || '').replace(/"/g, '""')}"`,
+      `"${(r.type || 'Voluntary Donation').replace(/"/g, '""')}"`,
+      `"${(r.donationHead || '').replace(/"/g, '""')}"`,
+      Number(r.amount || 0).toFixed(2),
+      `"${(r.receiptDate || '').replace(/"/g, '""')}"`,
+      `"${(r.paymentMode || r.paymentMethod || r.paymentType || 'Online / UPI').replace(/"/g, '""')}"`,
+      `"${(r.dateCreated || r.receiptDate || '').replace(/"/g, '""')}"`,
+      `"${(r.createdBy || 'Admin').replace(/"/g, '""')}"`
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Donation_Receipts_${activeTab}_Export.csv`);
+    const safeTrust = (effectiveTrustName || 'Trust').replace(/[^a-zA-Z0-9_-]/g, '_');
+    link.setAttribute('download', `${safeTrust}_Donation_Receipts_${activeTab}_Export.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Pagination logic
+  // Extract dynamic donation heads from registered heads and existing receipts
+  const dynamicHeadList = Array.from(
+    new Set([
+      ...heads.map(h => h.name || h.headName || h.title),
+      ...receipts.map(r => r.donationHead)
+    ].filter(Boolean))
+  ).sort();
+
+  // Filter receipts based on Search, Donation Head, and Payment Method
   const filtered = (receipts || []).filter(r => {
     if (!r) return false;
     const s = (searchTerm || '').toLowerCase();
@@ -367,14 +255,31 @@ export default function DonationReceiptsPage({ user }) {
     const rNo = String(r.receiptNo || '').toLowerCase();
     const dName = String(r.donorName || '').toLowerCase();
     const dHead = String(r.donationHead || '').toLowerCase();
-    return (
+    const pMode = String(r.paymentMode || r.paymentMethod || r.paymentType || '').toLowerCase();
+
+    const matchesSearch =
+      !s ||
       rNo.includes(s) ||
       dName.includes(s) ||
       phone.includes(s) ||
       email.includes(s) ||
-      dHead.includes(s)
-    );
+      dHead.includes(s) ||
+      pMode.includes(s);
+
+    const matchesHead =
+      headFilter === 'All' ||
+      !headFilter ||
+      dHead === headFilter.toLowerCase();
+
+    const matchesPaymentMode =
+      paymentModeFilter === 'All' ||
+      !paymentModeFilter ||
+      pMode === paymentModeFilter.toLowerCase() ||
+      (paymentModeFilter.toLowerCase() === 'online / upi' && (pMode.includes('online') || pMode.includes('upi')));
+
+    return matchesSearch && matchesHead && matchesPaymentMode;
   });
+
   const totalEntries = filtered.length;
   const totalPages = Math.ceil(totalEntries / entriesPerPage) || 1;
   const startIndex = (currentPage - 1) * entriesPerPage;
@@ -414,33 +319,48 @@ export default function DonationReceiptsPage({ user }) {
         </div>
       </div>
 
-      {/* Tab Buttons (Active Receipt vs Inactive Receipt) */}
-      <div className="tabs-row" style={{ marginBottom: '16px' }}>
+      {/* Tab Buttons (Active Receipt vs Inactive Receipt) & Right Side Export Excel Button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="tabs-row" style={{ marginBottom: 0 }}>
+          <button
+            type="button"
+            className={`tab-button ${activeTab === 'Active' ? 'active-tab selected' : 'inactive-tab'}`}
+            onClick={() => {
+              setActiveTab('Active');
+              setCurrentPage(1);
+            }}
+          >
+            <Check size={16} /> Active Receipt
+          </button>
+          <button
+            type="button"
+            className={`tab-button ${activeTab === 'Inactive' ? 'active-tab selected' : 'inactive-tab'}`}
+            onClick={() => {
+              setActiveTab('Inactive');
+              setCurrentPage(1);
+            }}
+          >
+            <Trash2 size={16} /> Inactive Receipt
+          </button>
+        </div>
+
+        {/* Right Side Export to Excel Button */}
         <button
           type="button"
-          className={`tab-button ${activeTab === 'Active' ? 'active-tab selected' : 'inactive-tab'}`}
-          onClick={() => {
-            setActiveTab('Active');
-            setCurrentPage(1);
-          }}
+          className="report-btn-export"
+          onClick={handleExportExcel}
+          title="Export donation receipts to Excel CSV format"
         >
-          <Check size={16} /> Active Receipt
-        </button>
-        <button
-          type="button"
-          className={`tab-button ${activeTab === 'Inactive' ? 'active-tab selected' : 'inactive-tab'}`}
-          onClick={() => {
-            setActiveTab('Inactive');
-            setCurrentPage(1);
-          }}
-        >
-          <Trash2 size={16} /> Inactive Receipt
+          <FileSpreadsheet size={16} />
+          <span>Export to Excel</span>
         </button>
       </div>
 
       {/* Table Card Container */}
       <div className="mint-table-card-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        {/* Controls: Show Entries + Search + Donation Head Filter + Payment Method Filter */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+          {/* Show Entries Dropdown */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', color: '#475569' }}>
             <span>Show</span>
             <select
@@ -467,215 +387,302 @@ export default function DonationReceiptsPage({ user }) {
             <span>entries</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', color: '#475569' }}>
-            <label htmlFor="receipts-search" style={{ fontWeight: '500' }}>Search:</label>
-            <input
-              id="receipts-search"
-              type="text"
-              placeholder="Search receipts..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={{
-                border: '1px solid #cbd5e1',
-                borderRadius: '6px',
-                padding: '6px 12px',
-                fontSize: '13px',
-                width: '220px',
-                outline: 'none',
-                transition: 'border-color 0.2s ease'
-              }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = '#00a651')}
-              onBlur={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
-            />
+          {/* Search and Filters */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Search Input */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px', color: '#475569' }}>
+              <label htmlFor="receipts-search" style={{ fontWeight: '500' }}>Search:</label>
+              <input
+                id="receipts-search"
+                type="text"
+                placeholder="Search receipts..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '13px',
+                  width: '180px',
+                  outline: 'none',
+                  backgroundColor: '#ffffff',
+                  color: '#1e293b',
+                  transition: 'border-color 0.2s ease'
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#00a651')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
+              />
+            </div>
+
+            {/* Donation Head Dropdown Filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px', color: '#475569' }}>
+              <label htmlFor="receipts-head-filter" style={{ fontWeight: '500' }}>Head:</label>
+              <select
+                id="receipts-head-filter"
+                value={headFilter}
+                onChange={(e) => {
+                  setHeadFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  fontSize: '13px',
+                  backgroundColor: '#ffffff',
+                  color: '#1e293b',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  minWidth: '150px'
+                }}
+              >
+                <option value="All">All Donation Heads</option>
+                {dynamicHeadList.map((hName) => (
+                  <option key={hName} value={hName}>
+                    {hName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Payment Method Dropdown Filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px', color: '#475569' }}>
+              <label htmlFor="receipts-payment-filter" style={{ fontWeight: '500' }}>Payment:</label>
+              <select
+                id="receipts-payment-filter"
+                value={paymentModeFilter}
+                onChange={(e) => {
+                  setPaymentModeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  fontSize: '13px',
+                  backgroundColor: '#ffffff',
+                  color: '#1e293b',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  minWidth: '140px'
+                }}
+              >
+                <option value="All">All Payment Modes</option>
+                <option value="Online / UPI">Online / UPI</option>
+                <option value="Cash">Cash</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="NEFT / RTGS">NEFT / RTGS</option>
+                <option value="Demand Draft">Demand Draft</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
           </div>
         </div>
 
         {/* Table */}
         <div className="table-responsive">
           <table className="custom-table table-mint">
-              <thead>
-                <tr>
-                  <th className="sortable">Receipt No. <span className="sort-icon">▲▼</span></th>
-                  <th className="sortable">Name <span className="sort-icon">▲▼</span></th>
-                  <th className="sortable">Phone <span className="sort-icon">▲▼</span></th>
-                  <th className="sortable">Type <span className="sort-icon">▲▼</span></th>
-                  <th className="sortable">Donation Head <span className="sort-icon">▲▼</span></th>
-                  <th className="sortable">Amount <span className="sort-icon">▲▼</span></th>
-                  <th className="sortable">Receipt Date <span className="sort-icon">▲▼</span></th>
-                  <th className="sortable">Reference <span className="sort-icon">▲▼</span></th>
-                  <th className="sortable">Date Created <span className="sort-icon">▲▼</span></th>
-                  <th>Action</th>
-                  <th>Created By</th>
+            <thead>
+              <tr>
+                <th style={{ width: '55px' }}>S.No</th>
+                <th>Receipt No.</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Type</th>
+                <th>Donation Head</th>
+                <th>Amount</th>
+                <th>Receipt Date</th>
+                <th>Payment Type</th>
+                <th>Date Created</th>
+                <th>Action</th>
+                <th>Created By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentEntries.map((rec, idx) => (
+                <tr key={rec._id || idx}>
+                  <td style={{ fontWeight: '500', color: '#475569' }}>
+                    {startIndex + idx + 1}
+                  </td>
+                  <td style={{ fontWeight: '600', color: '#212529' }}>
+                    {rec.receiptNo}
+                  </td>
+                  <td style={{ fontWeight: '500' }}>{rec.donorName}</td>
+                  <td>{rec.phone || rec.mobile || ''}</td>
+                  <td>{rec.type || 'Voluntary Donation'}</td>
+                  <td>{rec.donationHead}</td>
+                  <td style={{ fontWeight: '600' }}>
+                    ₹ {Number(rec.amount).toFixed(2)}
+                  </td>
+                  <td>{rec.receiptDate}</td>
+                  <td style={{ fontWeight: '500', color: '#0f172a' }}>
+                    {rec.paymentMode || rec.paymentMethod || rec.paymentType || 'Online / UPI'}
+                  </td>
+                  <td>{rec.dateCreated || rec.receiptDate}</td>
+                  <td>
+                    <div className="actions-cell">
+                      {/* 1. Edit Button */}
+                      <button
+                        className="action-btn"
+                        title="Edit Receipt"
+                        onClick={() => navigate(`/trust/edit-donation-receipt?pr_id=Mjk1NjIw&rid=${rec._id}`, { state: { receipt: rec } })}
+                      >
+                        <Pencil size={12} />
+                      </button>
+
+                      {/* 2. View/Print Receipt PDF */}
+                      <a
+                        href={`${rec.receiptNo ? `/api/receipts/pdf?receiptNo=${encodeURIComponent(rec.receiptNo)}` : `/api/receipts/pdf?id=${encodeURIComponent(rec._id)}`}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="action-btn"
+                        title="View & Print 80G Receipt PDF"
+                        onClick={(e) => {
+                          const url = `${rec.receiptNo
+                            ? `/api/receipts/pdf?receiptNo=${encodeURIComponent(rec.receiptNo)}`
+                            : `/api/receipts/pdf?id=${encodeURIComponent(rec._id)}`}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`;
+                          const win = window.open(url, '_blank');
+                          if (win) {
+                            e.preventDefault();
+                            win.focus();
+                          }
+                        }}
+                      >
+                        <Eye size={12} />
+                      </a>
+
+                      {/* 3. Download Receipt PDF (Placed between View and Delete) */}
+                      <button
+                        type="button"
+                        className="action-btn"
+                        title="Download 80G Receipt PDF"
+                        onClick={() => downloadReceiptPdfFile(rec)}
+                        aria-label="Download Receipt PDF"
+                      >
+                        <Download size={12} />
+                      </button>
+
+                      {/* 4. Delete / Inactivate */}
+                      <button
+                        className="action-btn"
+                        title={activeTab === 'Active' ? 'Move to Inactive' : 'Restore Receipt'}
+                        onClick={() => handleToggleStatus(rec)}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+
+                      {/* 5. WhatsApp Button (Only shown if mobile/phone is provided) */}
+                      {Boolean(rec.phone || rec.mobile) && (
+                        <button
+                          className="action-btn"
+                          title={`Share on WhatsApp with PDF (${rec.phone || rec.mobile})`}
+                          onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'whatsapp' })}
+                          aria-label="Share on WhatsApp"
+                        >
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            style={{ display: 'block' }}
+                          >
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                          </svg>
+                        </button>
+                      )}
+
+                      {/* 6. Email Button (Only shown if email is provided) */}
+                      {Boolean(rec.email) && (
+                        <button
+                          className="action-btn"
+                          title={`Send Receipt by Email with PDF Attached (${rec.email})`}
+                          onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'email' })}
+                          aria-label="Send Receipt by Email"
+                        >
+                          <Mail size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}>
+                      <Shield size={12} color="#444" /> {rec.createdBy || 'Admin'}
+                    </span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {currentEntries.map((rec) => (
-                  <tr key={rec._id}>
-                    <td style={{ fontWeight: '600', color: '#212529' }}>
-                      {rec.receiptNo}
-                    </td>
-                    <td style={{ fontWeight: '500' }}>{rec.donorName}</td>
-                    <td>{rec.phone || rec.mobile || ''}</td>
-                    <td>{rec.type || 'Voluntary Donation'}</td>
-                    <td>{rec.donationHead}</td>
-                    <td style={{ fontWeight: '600' }}>
-                      ₹ {Number(rec.amount).toFixed(2)}
-                    </td>
-                    <td>{rec.receiptDate}</td>
-                    <td>{rec.reference || ''}</td>
-                    <td>{rec.dateCreated || rec.receiptDate}</td>
-                    <td>
-                      <div className="actions-cell">
-                        {/* Edit Button */}
-                        <button
-                          className="action-btn"
-                          title="Edit Receipt"
-                          onClick={() => navigate(`/trust/edit-donation-receipt?pr_id=Mjk1NjIw&rid=${rec._id}`, { state: { receipt: rec } })}
-                        >
-                          <Pencil size={12} />
-                        </button>
-
-                        {/* View/Print Receipt PDF */}
-                        <a
-                          href={`${rec.receiptNo ? `/api/receipts/pdf?receiptNo=${encodeURIComponent(rec.receiptNo)}` : `/api/receipts/pdf?id=${encodeURIComponent(rec._id)}`}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="action-btn"
-                          title="View & Print 80G Receipt PDF"
-                          onClick={(e) => {
-                            const url = `${rec.receiptNo
-                              ? `/api/receipts/pdf?receiptNo=${encodeURIComponent(rec.receiptNo)}`
-                              : `/api/receipts/pdf?id=${encodeURIComponent(rec._id)}`}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`;
-                            const win = window.open(url, '_blank');
-                            if (win) {
-                              e.preventDefault();
-                              win.focus();
-                            }
-                          }}
-                        >
-                          <Eye size={12} />
-                        </a>
-
-                        {/* Delete / Inactivate */}
-                        <button
-                          className="action-btn"
-                          title={activeTab === 'Active' ? 'Move to Inactive' : 'Restore Receipt'}
-                          onClick={() => handleToggleStatus(rec)}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-
-                        {/* WhatsApp Button (Only shown if mobile/phone is provided) */}
-                        {Boolean(rec.phone || rec.mobile) && (
-                          <button
-                            className="action-btn"
-                            title={`Share on WhatsApp with PDF (${rec.phone || rec.mobile})`}
-                            onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'whatsapp' })}
-                            aria-label="Share on WhatsApp"
-                          >
-                            <svg
-                              width="13"
-                              height="13"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                              style={{ display: 'block' }}
-                            >
-                              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                            </svg>
-                          </button>
-                        )}
-
-                        {/* Email Button (Only shown if email is provided) */}
-                        {Boolean(rec.email) && (
-                          <button
-                            className="action-btn"
-                            title={`Send Receipt by Email with PDF Attached (${rec.email})`}
-                            onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'email' })}
-                            aria-label="Send Receipt by Email"
-                          >
-                            <Mail size={12} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}>
-                        <Shield size={12} color="#444" /> {rec.createdBy || 'Admin'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-
-                {currentEntries.length === 0 && (
-                  <tr>
-                    <td colSpan="11" style={{ textAlign: 'center', padding: '30px', color: '#777' }}>
-                      {loading ? 'Loading receipts...' : `No ${activeTab.toLowerCase()} receipts found`}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Table Footer */}
-          <div className="table-pagination-row">
-            <div>
-              Showing {totalEntries > 0 ? startIndex + 1 : 0} to{' '}
-              {Math.min(startIndex + entriesPerPage, totalEntries)} of {totalEntries} entries
-            </div>
-
-            <div className="pagination-controls">
-              <button
-                className="page-btn"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              >
-                Previous
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-                <button
-                  key={pageNum}
-                  className={`page-btn ${currentPage === pageNum ? 'active' : ''}`}
-                  onClick={() => setCurrentPage(pageNum)}
-                >
-                  {pageNum}
-                </button>
               ))}
-              <button
-                className="page-btn"
-                disabled={currentPage === totalPages || totalPages === 0}
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              >
-                Next
-              </button>
-            </div>
-          </div>
+
+              {currentEntries.length === 0 && (
+                <tr>
+                  <td colSpan="12" style={{ textAlign: 'center', padding: '30px', color: '#777' }}>
+                    {loading ? 'Loading receipts...' : `No ${activeTab.toLowerCase()} receipts found`}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
 
-        {/* Share Receipt Modal (WhatsApp & Email with Attached PDF) */}
-        <ShareReceiptModal
-          isOpen={shareModal.isOpen}
-          receipt={shareModal.receipt}
-          initialMode={shareModal.mode}
-          trustEmail={effectiveEmail}
-          trustName={effectiveTrustName}
-          onClose={() => setShareModal({ isOpen: false, receipt: null, mode: 'whatsapp' })}
-        />
+        {/* Table Footer: Pagination */}
+        <div className="table-pagination-row">
+          <div>
+            Showing {totalEntries > 0 ? startIndex + 1 : 0} to{' '}
+            {Math.min(startIndex + entriesPerPage, totalEntries)} of {totalEntries} entries
+          </div>
 
-        {/* Themed Confirmation & Notification Modal */}
-        <SimplePopup
-          isOpen={popup.isOpen}
-          type={popup.type}
-          title={popup.title}
-          message={popup.message}
-          confirmText={popup.confirmText}
-          cancelText={popup.cancelText}
-          onConfirm={popup.onConfirm}
-          onCancel={popup.onCancel}
-        />
-      </>
-    );
-  }
+          <div className="pagination-controls">
+            <button
+              className="page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            >
+              Previous
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+              <button
+                key={pageNum}
+                className={`page-btn ${currentPage === pageNum ? 'active' : ''}`}
+                onClick={() => setCurrentPage(pageNum)}
+              >
+                {pageNum}
+              </button>
+            ))}
+            <button
+              className="page-btn"
+              disabled={currentPage === totalPages || totalPages === 0}
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Share Receipt Modal (WhatsApp & Email with Attached PDF) */}
+      <ShareReceiptModal
+        isOpen={shareModal.isOpen}
+        receipt={shareModal.receipt}
+        initialMode={shareModal.mode}
+        trustEmail={effectiveEmail}
+        trustName={effectiveTrustName}
+        onClose={() => setShareModal({ isOpen: false, receipt: null, mode: 'whatsapp' })}
+      />
+
+      {/* Themed Confirmation & Notification Modal */}
+      <SimplePopup
+        isOpen={popup.isOpen}
+        type={popup.type}
+        title={popup.title}
+        message={popup.message}
+        confirmText={popup.confirmText}
+        cancelText={popup.cancelText}
+        onConfirm={popup.onConfirm}
+        onCancel={popup.onCancel}
+      />
+    </>
+  );
+}
