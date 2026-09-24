@@ -299,9 +299,10 @@ export default function SuperAdminDashboardPage({ user }) {
                         <td style={{ textAlign: 'center' }}>
                           <button
                             type="button"
-                            className="btn-table-action"
+                            className="action-btn action-btn-purple"
                             onClick={() => handlePrintReceipt(r)}
                             title="Print Receipt"
+                            aria-label="Print Receipt"
                           >
                             <Printer size={13} />
                           </button>

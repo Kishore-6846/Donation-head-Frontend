@@ -3,8 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import SimplePopup from '../components/SimplePopup';
 import VerificationDemoModal from '../components/VerificationDemoModal';
-import { Sparkles, List, AlertCircle, Trash2 } from 'lucide-react';
+import { Sparkles, List, AlertCircle, Trash2, AlertTriangle, ShieldAlert, Clock } from 'lucide-react';
 import { getTrustSession, isSuperUser } from '../utils/authStorage';
+import { checkIsPlanExpired } from '../utils/planUtils';
 
 // Accurate Indian Numbering System to Words Converter
 function convertNumberToWords(num) {
@@ -89,6 +90,8 @@ export default function NewDonationReceiptPage({ user }) {
     Boolean(user?.isSuperAdmin) ||
     (user?.role && user.role.toLowerCase().includes('super')) ||
     location.pathname.toLowerCase().startsWith('/superadmin');
+
+  const isPlanExpired = !isSuperAdmin && checkIsPlanExpired(activeTrustUser);
 
   // Current Date format YYYY-MM-DD (e.g. 2026-09-09)
   const todayISO = new Date().toISOString().split('T')[0];
@@ -450,6 +453,21 @@ export default function NewDonationReceiptPage({ user }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isPlanExpired && !isSuperAdmin) {
+      setPopup({
+        isOpen: true,
+        type: 'error',
+        title: 'Subscription Plan Expired',
+        message: 'Your organization subscription plan has expired. Creating new donation receipts is paused until you upgrade or renew. Please tap Upgrade to continue.',
+        confirmText: 'Upgrade Subscription',
+        onConfirm: () => {
+          setPopup(p => ({ ...p, isOpen: false }));
+          navigate('/trust/upgrade-plan');
+        }
+      });
+      return;
+    }
+
     const errors = {};
 
     // 1. Name is required
@@ -699,6 +717,57 @@ export default function NewDonationReceiptPage({ user }) {
       </div>
 
       <div className="mint-table-card-container" style={{ flex: 1, boxSizing: 'border-box' }}>
+        {isPlanExpired && (
+          <div
+            style={{
+              backgroundColor: '#fff1f2',
+              border: '1.5px solid #fca5a5',
+              borderRadius: '8px',
+              padding: '16px 20px',
+              marginBottom: '22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '14px',
+              boxShadow: '0 2px 8px rgba(225, 29, 72, 0.08)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <ShieldAlert size={26} style={{ color: '#e11d48', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '15px', color: '#9f1239' }}>
+                  Receipt Creation Paused – Subscription Plan Expired
+                </div>
+                <div style={{ fontSize: '13px', color: '#881337', marginTop: '2px' }}>
+                  Your subscription plan has expired. Creating new donation receipts is disabled until you renew. Tap the button to upgrade your plan.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/trust/upgrade-plan')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 18px',
+                backgroundColor: '#e11d48',
+                color: '#ffffff',
+                fontWeight: 600,
+                fontSize: '13px',
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(225, 29, 72, 0.3)'
+              }}
+            >
+              <Sparkles size={14} />
+              <span>Upgrade Subscription</span>
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} noValidate>
           {/* ================= ROW 1: Receipt No, Name, Full Address ================= */}
           <div className="receipt-form-row-1">
@@ -1199,13 +1268,16 @@ export default function NewDonationReceiptPage({ user }) {
           <div className="receipt-submit-container">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (isPlanExpired && !isSuperAdmin)}
               className="receipt-submit-btn"
               style={{
-                cursor: isSubmitting ? 'wait' : 'pointer'
+                cursor: (isPlanExpired && !isSuperAdmin) ? 'not-allowed' : (isSubmitting ? 'wait' : 'pointer'),
+                opacity: (isPlanExpired && !isSuperAdmin) ? 0.6 : 1,
+                backgroundColor: (isPlanExpired && !isSuperAdmin) ? '#94a3b8' : undefined
               }}
+              title={(isPlanExpired && !isSuperAdmin) ? 'Action Disabled: Subscription plan has expired. Please upgrade your plan.' : undefined}
             >
-              {isSubmitting ? 'Submitting...' : 'Submit'}
+              {isSubmitting ? 'Submitting...' : (isPlanExpired && !isSuperAdmin ? 'Receipt Creation Paused (Plan Expired)' : 'Submit')}
             </button>
           </div>
         </form>

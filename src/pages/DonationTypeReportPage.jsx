@@ -182,7 +182,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
 
     const headers = [
       'S.No',
-      'User / Trust',
+      ...(isSuperAdmin ? ['User / Trust'] : []),
       'Receipt No.',
       'Name',
       'Pan Number',
@@ -196,7 +196,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
 
     const rows = dataToExport.map((r, idx) => [
       idx + 1,
-      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
+      ...(isSuperAdmin ? [`"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`] : []),
       `"${r.receiptNo || ''}"`,
       `"${r.name || ''}"`,
       `"${r.panNumber || ''}"`,
@@ -502,18 +502,19 @@ export default function DonationTypeReportPage({ user: propUser }) {
             <input
               id="typeSearchInput"
               type="text"
+              placeholder={isSuperAdmin ? "Search donation type, receipt no, donor, trust..." : "Search donation type, receipt no, donor, head..."}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
               style={{
-                padding: '4px 8px',
+                padding: '5px 10px',
                 border: '1px solid #ced4da',
                 borderRadius: '4px',
                 fontSize: '13px',
                 outline: 'none',
-                width: '180px'
+                width: '260px'
               }}
             />
           </div>
@@ -531,15 +532,17 @@ export default function DonationTypeReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1600px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: isSuperAdmin ? '1600px' : '1420px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: '60px' }}>
                   S.No
                 </th>
-                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
-                  User / Trust {renderSortIndicator('trustName')}
-                </th>
+                {isSuperAdmin && (
+                  <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                    User / Trust {renderSortIndicator('trustName')}
+                  </th>
+                )}
                 <th style={{ ...thStyle, width: '160px' }} onClick={() => handleSort('receiptNo')}>
                   Receipt No. {renderSortIndicator('receiptNo')}
                 </th>
@@ -573,7 +576,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={isSuperAdmin ? 11 : 10}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -589,7 +592,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={isSuperAdmin ? 11 : 10}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -605,7 +608,7 @@ export default function DonationTypeReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={isSuperAdmin ? 11 : 10}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -622,7 +625,9 @@ export default function DonationTypeReportPage({ user: propUser }) {
                 paginatedData.map((row, idx) => (
                   <tr key={row.receiptNo || idx}>
                     <td style={{ ...tdStyle, fontWeight: '600', color: '#475569' }}>{startIndex + idx + 1}</td>
-                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
+                    {isSuperAdmin && (
+                      <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
+                    )}
                     <td style={tdStyle}>{row.receiptNo}</td>
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>
                     <td style={tdStyle}>{row.panNumber || ''}</td>

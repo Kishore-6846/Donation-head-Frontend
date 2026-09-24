@@ -286,26 +286,6 @@ export default function SuperAdminSidebar({ isOpen, onClose, user, onLogout }) {
                       <span>Payment Mode Report</span>
                     </Link>
                   </li>
-                  <li>
-                    <Link
-                      to="/superadmin/all-reports"
-                      className={`sidebar-sublink ${path.includes('all-reports') || path.includes('published-reports') ? 'active' : ''}`}
-                      onClick={handleLinkClick}
-                    >
-                      <span className="sublink-dot" />
-                      <span>All Published Reports</span>
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/superadmin/new-report"
-                      className={`sidebar-sublink ${path.includes('new-report') || path.includes('create-report') ? 'active' : ''}`}
-                      onClick={handleLinkClick}
-                    >
-                      <span className="sublink-dot" />
-                      <span>Create Report</span>
-                    </Link>
-                  </li>
                 </ul>
               )}
             </li>

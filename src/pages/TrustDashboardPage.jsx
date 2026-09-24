@@ -18,7 +18,9 @@ import {
   Phone,
   Shield,
   Calendar,
-  Pencil
+  Pencil,
+  Smartphone,
+  Hexagon
 } from 'lucide-react';
 
 // Default donation heads for instant fallback
@@ -321,102 +323,258 @@ export default function TrustDashboardPage({ user }) {
     <>
       <div className="dashboard-container-modern">
       {/* 1. Mint Hero Banner with Trust Profile */}
-      <div className="mint-hero-banner" style={{ marginBottom: '24px' }}>
-        <div className="mint-hero-left" style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
+      <div
+        className="mint-hero-banner"
+        style={{
+          background: 'linear-gradient(135deg, #ebfaf2 0%, #f4fdf7 100%)',
+          border: '1px solid #ccebd7',
+          borderRadius: '18px',
+          padding: '22px 28px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '24px',
+          boxShadow: '0 2px 10px rgba(0, 166, 81, 0.04)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '22px', flex: 1, minWidth: 0 }}>
+          {/* Prominent Trust Logo / Emblem */}
           <div
             style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '14px',
-              background: effectiveLogo ? '#ffffff' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              width: '116px',
+              height: '116px',
+              borderRadius: '20px',
+              backgroundColor: '#0a0a0a',
               color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '26px',
-              fontWeight: 800,
-              boxShadow: '0 8px 16px rgba(16, 185, 129, 0.25)',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.12)',
               flexShrink: 0,
-              overflow: 'hidden',
-              border: effectiveLogo ? '2px solid #e2e8f0' : 'none'
+              overflow: 'hidden'
             }}
           >
             {effectiveLogo ? (
               <img
                 src={effectiveLogo}
                 alt={effectiveTrustName}
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              effectiveTrustName.charAt(0).toUpperCase()
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#10b981',
+                  fontSize: '38px',
+                  fontWeight: 800
+                }}
+              >
+                {effectiveTrustName.charAt(0).toUpperCase()}
+              </div>
             )}
           </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
-              <div className="mint-hero-badge">
-                <Building size={13} />
+
+          {/* Profile Details Content */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Top Badges Row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backgroundColor: '#dcfce7',
+                  color: '#15803d',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  padding: '3.5px 10px',
+                  borderRadius: '16px',
+                  letterSpacing: '0.4px',
+                  textTransform: 'uppercase'
+                }}
+              >
+                <Smartphone size={12} strokeWidth={2.4} />
                 <span>TRUST / NGO PROFILE</span>
               </div>
-              <span className={`badge-pill ${effectiveStatus === 'Active' ? 'badge-success' : (effectiveStatus === 'Trial' ? 'badge-warning' : 'badge-danger')}`}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  backgroundColor: effectiveStatus === 'Active' ? '#dcfce7' : (effectiveStatus === 'Trial' ? '#fef3c7' : '#fee2e2'),
+                  color: effectiveStatus === 'Active' ? '#16a34a' : (effectiveStatus === 'Trial' ? '#d97706' : '#dc2626'),
+                  fontSize: '11.5px',
+                  fontWeight: '600',
+                  padding: '3.5px 10px',
+                  borderRadius: '16px'
+                }}
+              >
                 {effectiveStatus}
               </span>
-              <span className="badge-pill badge-info" style={{ fontWeight: 600 }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  backgroundColor: '#e0f2fe',
+                  color: '#0284c7',
+                  fontSize: '11.5px',
+                  fontWeight: '600',
+                  padding: '3.5px 12px',
+                  borderRadius: '16px'
+                }}
+              >
                 {effectivePlan} Plan
               </span>
             </div>
-            <h1 className="mint-hero-title" style={{ fontSize: '24px', marginBottom: '6px' }}>
+
+            {/* Trust Name Heading */}
+            <h1
+              style={{
+                fontSize: '25px',
+                fontWeight: '800',
+                color: '#0f172a',
+                lineHeight: '1.2',
+                margin: '4px 0 9px 0',
+                letterSpacing: '-0.3px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
               {effectiveTrustName}
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px', color: '#475569', flexWrap: 'wrap' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Mail size={13} style={{ color: '#10b981' }} /> {effectiveEmail}
+
+            {/* Profile Info Row 1 */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '18px',
+                fontSize: '13px',
+                color: '#475569',
+                flexWrap: 'wrap',
+                marginBottom: '5px'
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <Mail size={13.5} style={{ color: '#10b981', flexShrink: 0 }} />
+                <span>{effectiveEmail}</span>
               </span>
               {effectiveMobile && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <Phone size={13} style={{ color: '#10b981' }} /> {effectiveMobile}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Phone size={13.5} style={{ color: '#10b981', flexShrink: 0 }} />
+                  <span>{effectiveMobile}</span>
                 </span>
               )}
               {effectiveRegNo && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontFamily: 'monospace' }}>
-                  <Shield size={13} style={{ color: '#3b82f6' }} /> Reg: {effectiveRegNo}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Hexagon size={13.5} style={{ color: '#0284c7', flexShrink: 0 }} />
+                  <span>Reg : {effectiveRegNo}</span>
                 </span>
               )}
+            </div>
+
+            {/* Profile Info Row 2 */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '18px',
+                fontSize: '13px',
+                color: '#475569',
+                flexWrap: 'wrap'
+              }}
+            >
               {effective80G && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <Sparkles size={13} style={{ color: '#10b981' }} /> 80G: {effective80G}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Sparkles size={13.5} style={{ color: '#10b981', flexShrink: 0 }} />
+                  <span>80G: {effective80G}</span>
                 </span>
               )}
               {effectiveContactPerson && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <User size={13} style={{ color: '#6366f1' }} /> {effectiveContactPerson}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <User size={13.5} style={{ color: '#8b5cf6', flexShrink: 0 }} />
+                  <span>{effectiveContactPerson}</span>
                 </span>
               )}
-              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Calendar size={13} style={{ color: '#64748b' }} /> Joined: {effectiveJoined}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <Calendar size={13.5} style={{ color: '#64748b', flexShrink: 0 }} />
+                <span>Joined: {effectiveJoined}</span>
               </span>
             </div>
           </div>
         </div>
 
-        <div className="mint-hero-right" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Action Buttons on Right */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center',
+            flexShrink: 0
+          }}
+        >
           <button
             type="button"
-            className="btn-trust-secondary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 16px', fontSize: '13.5px' }}
             onClick={() => navigate('/trust/my-profile')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              fontSize: '13px',
+              fontWeight: '600',
+              backgroundColor: '#ffffff',
+              border: '1.5px solid #10b981',
+              color: '#059669',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = '#ecfdf5';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = '#ffffff';
+            }}
             title="View Full Trust Profile"
           >
-            <User size={15} />
+            <User size={14} />
             <span>My Profile</span>
           </button>
           <button
             type="button"
-            className="btn-trust-primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', fontSize: '13.5px' }}
             onClick={() => navigate('/trust/edit-profile')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 16px',
+              fontSize: '13px',
+              fontWeight: '600',
+              backgroundColor: '#00a651',
+              border: '1px solid #00a651',
+              color: '#ffffff',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              boxShadow: '0 2px 6px rgba(0, 166, 81, 0.25)'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = '#059669';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = '#00a651';
+            }}
             title="Edit Organization Details"
           >
-            <Pencil size={15} />
+            <Pencil size={14} />
             <span>Edit Profile</span>
           </button>
         </div>

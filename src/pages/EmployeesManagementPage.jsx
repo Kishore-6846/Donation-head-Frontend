@@ -446,30 +446,33 @@ export default function EmployeesManagementPage() {
                     </span>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <div className="actions-cell" style={{ justifyContent: 'center' }}>
                       <button
                         type="button"
-                        className="btn-table-action"
+                        className="action-btn action-btn-edit"
                         onClick={() => navigate(`/superadmin/new-employee?id=${emp._id}`)}
                         title="Edit Employee"
+                        aria-label="Edit Employee"
                       >
-                        <Edit2 size={14} />
+                        <Edit2 size={13} />
                       </button>
                       <button
                         type="button"
-                        className="btn-table-action"
+                        className="action-btn action-btn-orange"
                         onClick={() => handleToggleStatus(emp)}
                         title={emp.status === 'Active' ? 'Deactivate' : 'Activate'}
+                        aria-label={emp.status === 'Active' ? 'Deactivate' : 'Activate'}
                       >
-                        {emp.status === 'Active' ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                        {emp.status === 'Active' ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
                       </button>
                       <button
                         type="button"
-                        className="btn-table-action delete"
+                        className="action-btn action-btn-delete"
                         onClick={() => handleDeleteEmployee(emp)}
                         title="Delete Employee"
+                        aria-label="Delete Employee"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </td>

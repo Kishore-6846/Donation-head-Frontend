@@ -972,7 +972,7 @@ export default function StaffPage({ user: propUser }) {
                       {s.createdAt ? formatToIST(s.createdAt) : (s.created ? formatToIST(s.created) : (s.formattedDate ? formatToIST(s.formattedDate) : 'Today'))}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                      <div className="actions-cell" style={{ justifyContent: 'center' }}>
                         {/* Active / Inactive Status Toggle Button */}
                         <button
                           type="button"
@@ -999,31 +999,19 @@ export default function StaffPage({ user: propUser }) {
 
                         <button
                           type="button"
+                          className="action-btn action-btn-edit"
                           title="Edit Staff"
                           onClick={() => handleOpenEditModal(s)}
-                          style={{
-                            background: '#f8f9fa',
-                            border: '1px solid #ced4da',
-                            borderRadius: '4px',
-                            padding: '5px 8px',
-                            cursor: 'pointer',
-                            color: '#495057'
-                          }}
+                          aria-label="Edit Staff"
                         >
                           <Pencil size={13} />
                         </button>
                         <button
                           type="button"
+                          className="action-btn action-btn-delete"
                           title="Delete Staff"
                           onClick={() => handleDelete(s._id, s.name)}
-                          style={{
-                            background: '#f8f9fa',
-                            border: '1px solid #ced4da',
-                            borderRadius: '4px',
-                            padding: '5px 8px',
-                            cursor: 'pointer',
-                            color: '#dc2626'
-                          }}
+                          aria-label="Delete Staff"
                         >
                           <Trash2 size={13} />
                         </button>

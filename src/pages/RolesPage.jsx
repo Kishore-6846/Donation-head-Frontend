@@ -367,87 +367,49 @@ export default function RolesPage({ user: propUser }) {
                       <td style={{ ...tdStyle, color: '#212529', fontWeight: 600 }}>{r.roleName}</td>
                       <td style={{ ...tdStyle, color: '#555' }}>{formatRoleCreated(r)}</td>
                       <td style={tdStyle}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <div className="actions-cell">
                           {/* Members Button with Users icon */}
                           <button
                             type="button"
+                            className="action-btn action-btn-purple"
                             title={`View Staff Members assigned to "${r.roleName}" (${assignedCount})`}
                             onClick={() => handleOpenMembersModal(r.roleName)}
-                            style={{
-                              ...actionBtnStyle,
-                              backgroundColor: '#eff6ff',
-                              color: '#2563eb',
-                              border: '1px solid rgba(37, 99, 235, 0.25)'
-                            }}
-                            onMouseOver={(e) => {
-                              e.currentTarget.style.backgroundColor = '#2563eb';
-                              e.currentTarget.style.color = '#ffffff';
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.style.backgroundColor = '#eff6ff';
-                              e.currentTarget.style.color = '#2563eb';
-                            }}
+                            aria-label={`View Staff Members assigned to "${r.roleName}"`}
                           >
-                            <Users size={15} />
+                            <Users size={13} />
                           </button>
 
                           {/* View Role Permissions Button */}
                           <button
                             type="button"
+                            className="action-btn action-btn-view"
                             title="View Role Details"
                             onClick={() => navigate(`/trust/edit-role/${r._id || r.roleName}?mode=view`)}
-                            style={actionBtnStyle}
-                            onMouseOver={(e) => {
-                              e.currentTarget.style.backgroundColor = '#059669';
-                              e.currentTarget.style.color = '#ffffff';
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.style.backgroundColor = '#ecfdf5';
-                              e.currentTarget.style.color = '#059669';
-                            }}
+                            aria-label="View Role Details"
                           >
-                            <Eye size={15} />
+                            <Eye size={13} />
                           </button>
 
                           {/* Edit Button */}
                           <button
                             type="button"
+                            className="action-btn action-btn-edit"
                             title="Edit Role"
                             onClick={() => navigate(`/trust/edit-role/${r._id || r.roleName}`)}
-                            style={actionBtnStyle}
-                            onMouseOver={(e) => {
-                              e.currentTarget.style.backgroundColor = '#059669';
-                              e.currentTarget.style.color = '#ffffff';
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.style.backgroundColor = '#ecfdf5';
-                              e.currentTarget.style.color = '#059669';
-                            }}
+                            aria-label="Edit Role"
                           >
-                            <Pencil size={15} />
+                            <Pencil size={13} />
                           </button>
 
                           {/* Delete Button */}
                           <button
                             type="button"
+                            className="action-btn action-btn-delete"
                             title="Delete"
                             onClick={() => triggerDelete(r._id, r.roleName)}
-                            style={{
-                              ...actionBtnStyle,
-                              backgroundColor: '#fef2f2',
-                              color: '#dc2626',
-                              border: '1px solid #fee2e2'
-                            }}
-                            onMouseOver={(e) => {
-                              e.currentTarget.style.backgroundColor = '#dc2626';
-                              e.currentTarget.style.color = '#ffffff';
-                            }}
-                            onMouseOut={(e) => {
-                              e.currentTarget.style.backgroundColor = '#fef2f2';
-                              e.currentTarget.style.color = '#dc2626';
-                            }}
+                            aria-label="Delete"
                           >
-                            <Trash2 size={15} />
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>

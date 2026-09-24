@@ -42,6 +42,7 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import PrintReceiptPage from './pages/PrintReceiptPage';
 import WhatsAppButton from './components/WhatsAppButton';
 import SimplePopup from './components/SimplePopup';
+import ExpiredPlanBanner from './components/ExpiredPlanBanner';
 
 // Super Admin Pages
 import PlansManagementPage from './pages/PlansManagementPage';
@@ -58,8 +59,6 @@ import NewReceiptTypePage from './pages/NewReceiptTypePage';
 import NewNotificationPage from './pages/NewNotificationPage';
 import ReportTypesPage from './pages/ReportTypesPage';
 import NewReportTypePage from './pages/NewReportTypePage';
-import PublishedReportsPage from './pages/PublishedReportsPage';
-import NewReportPage from './pages/NewReportPage';
 import CustomReportsAdminPage from './pages/CustomReportsAdminPage';
 import DynamicReportViewerPage from './pages/DynamicReportViewerPage';
 import TrustNotificationsPage from './pages/TrustNotificationsPage';
@@ -268,11 +267,14 @@ function AppContent() {
 
       <div className={isPlainLayout ? "app-plain-column" : "app-main-column"}>
         {!isPlainLayout && (
-          <TopHeader
-            user={user}
-            onLogout={handleLogout}
-            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          />
+          <>
+            <TopHeader
+              user={user}
+              onLogout={handleLogout}
+              onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+            />
+            <ExpiredPlanBanner user={user} />
+          </>
         )}
 
         {/* Public Top Header for Policy pages when accessed without login */}
@@ -517,13 +519,13 @@ function AppContent() {
               <Route path="/superadmin/edit-report-type/:id" element={<NewReportTypePage />} />
               <Route path="/new-report-type" element={<NewReportTypePage />} />
 
-              <Route path="/superadmin/all-reports" element={<PublishedReportsPage />} />
-              <Route path="/superadmin/published-reports" element={<PublishedReportsPage />} />
-              <Route path="/superadmin/new-report" element={<NewReportPage />} />
-              <Route path="/superadmin/edit-report/:id" element={<NewReportPage />} />
-              <Route path="/new-report" element={<NewReportPage />} />
-              <Route path="/trust/new-report" element={<NewReportPage />} />
-              <Route path="/trust/create-report" element={<NewReportPage />} />
+              <Route path="/superadmin/all-reports" element={<Navigate to="/superadmin/reports-receipts" replace />} />
+              <Route path="/superadmin/published-reports" element={<Navigate to="/superadmin/reports-receipts" replace />} />
+              <Route path="/superadmin/new-report" element={<Navigate to="/superadmin/reports-receipts" replace />} />
+              <Route path="/superadmin/edit-report/:id" element={<Navigate to="/superadmin/reports-receipts" replace />} />
+              <Route path="/new-report" element={<Navigate to="/superadmin/reports-receipts" replace />} />
+              <Route path="/trust/new-report" element={<Navigate to="/trust/reports" replace />} />
+              <Route path="/trust/create-report" element={<Navigate to="/trust/reports" replace />} />
               <Route path="/superadmin/report/:id" element={<DynamicReportViewerPage />} />
               <Route path="/superadmin/custom-report/:id" element={<DynamicReportViewerPage />} />
               <Route path="/trust/custom-report/:id" element={<DynamicReportViewerPage />} />
@@ -556,8 +558,8 @@ function AppContent() {
               <Route path="/receipt-types" element={<Navigate to="/all-receipts" replace />} />
               <Route path="/report-types" element={<ReportTypesPage />} />
               <Route path="/all-receipts" element={<AllReceiptsAdminPage />} />
-              <Route path="/all-reports" element={<PublishedReportsPage />} />
-              <Route path="/published-reports" element={<PublishedReportsPage />} />
+              <Route path="/all-reports" element={<Navigate to="/superadmin/reports-receipts" replace />} />
+              <Route path="/published-reports" element={<Navigate to="/superadmin/reports-receipts" replace />} />
               <Route path="/notifications" element={<NotificationsManagementPage />} />
               <Route path="/superadmin-reports" element={<SuperAdminReportsPage />} />
               <Route path="/superadmin/revenue" element={<SuperAdminReportsPage />} />
@@ -689,8 +691,8 @@ function AppContent() {
               <Route path="/trust/reports/:type" element={<ReportsPage user={user} />} />
               <Route path="/trust/superadmin-reports" element={<CustomReportsAdminPage user={user} />} />
               <Route path="/trust/custom-reports" element={<CustomReportsAdminPage user={user} />} />
-              <Route path="/trust/all-reports" element={<PublishedReportsPage user={user} />} />
-              <Route path="/trust/published-reports" element={<PublishedReportsPage user={user} />} />
+              <Route path="/trust/all-reports" element={<Navigate to="/trust/reports" replace />} />
+              <Route path="/trust/published-reports" element={<Navigate to="/trust/reports" replace />} />
 
               {/* Profile & Settings */}
               <Route path="/trust/my-profile" element={<MyProfilePage user={activeTrustUser} />} />

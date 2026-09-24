@@ -13,8 +13,21 @@ export default function ReceiptReportPage({ user: propUser }) {
   const [financialYear, setFinancialYear] = useState('2026-2027');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [donationHead, setDonationHead] = useState('');
+  const [paymentMode, setPaymentMode] = useState('');
+  const [headsList, setHeadsList] = useState([]);
   const [selectedTrust, setSelectedTrust] = useState('');
   const [trustsList, setTrustsList] = useState([]);
+
+  const paymentModesList = [
+    'Online / UPI',
+    'Cash',
+    'Cheque',
+    'Net Banking / NEFT / RTGS',
+    'Credit / Debit Card',
+    'Demand Draft',
+    'Other'
+  ];
 
   useEffect(() => {
     if (isSuperAdmin) {
@@ -32,10 +45,39 @@ export default function ReceiptReportPage({ user: propUser }) {
     }
   }, [isSuperAdmin]);
 
+  useEffect(() => {
+    let url = '/api/donation-heads?limit=100';
+    if (isSuperAdmin) {
+      url += '&isSuperAdmin=true';
+    } else {
+      const tName = currentUser?.trustName || (currentUser?.name && !currentUser.name.toLowerCase().includes('super') ? currentUser.name : '');
+      const uEmail = currentUser?.email || '';
+      if (tName) url += `&trustName=${encodeURIComponent(tName)}`;
+      if (uEmail) url += `&trustEmail=${encodeURIComponent(uEmail)}`;
+    }
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        const defaultHeads = ['General Donation', '365 Drive', 'Food Drive', 'Fengal Cyclone', 'Kind', 'General', 'Anna Chathiram', 'Education', 'Medical Relief', 'Corpus Fund'];
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          const fetchedNames = data.data.map(h => h.name || h.rawName).filter(Boolean);
+          setHeadsList(Array.from(new Set([...fetchedNames, ...defaultHeads])));
+        } else {
+          setHeadsList(defaultHeads);
+        }
+      })
+      .catch(() => {
+        setHeadsList(['General Donation', '365 Drive', 'Food Drive', 'Fengal Cyclone', 'Kind', 'General', 'Anna Chathiram', 'Education', 'Medical Relief', 'Corpus Fund']);
+      });
+  }, [isSuperAdmin, currentUser]);
+
   const [activeFilterInfo, setActiveFilterInfo] = useState({
     financialYear: '2026-2027',
     fromDate: '',
     toDate: '',
+    donationHead: '',
+    paymentMode: '',
     trust: ''
   });
 
@@ -49,12 +91,14 @@ export default function ReceiptReportPage({ user: propUser }) {
   const [sortField, setSortField] = useState('receiptNo');
   const [sortDirection, setSortDirection] = useState('asc');
 
-  const fetchReceipts = async (fy, fromD = fromDate, toD = toDate, trust = selectedTrust) => {
+  const fetchReceipts = async (fy, fromD = fromDate, toD = toDate, trust = selectedTrust, dHead = donationHead, pMode = paymentMode) => {
     setLoading(true);
     try {
       let url = `/api/reports/receipts?financialYear=${encodeURIComponent(fy || financialYear)}`;
       if (fromD) url += `&fromDate=${encodeURIComponent(fromD)}`;
       if (toD) url += `&toDate=${encodeURIComponent(toD)}`;
+      if (dHead) url += `&donationHead=${encodeURIComponent(dHead)}`;
+      if (pMode) url += `&paymentMode=${encodeURIComponent(pMode)}`;
       if (trust) {
         url += `&trustName=${encodeURIComponent(trust)}`;
       } else if (!isSuperAdmin && (currentUser?.email || currentUser?.trustName)) {
@@ -76,6 +120,8 @@ export default function ReceiptReportPage({ user: propUser }) {
     setFinancialYear('2026-2027');
     setFromDate('');
     setToDate('');
+    setDonationHead('');
+    setPaymentMode('');
     setSelectedTrust('');
     setSearchTerm('');
     setCurrentPage(1);
@@ -86,9 +132,9 @@ export default function ReceiptReportPage({ user: propUser }) {
   const handleDateFilterSubmit = (e) => {
     if (e) e.preventDefault();
     setIsSubmitted(true);
-    setActiveFilterInfo({ financialYear, fromDate, toDate, trust: selectedTrust });
+    setActiveFilterInfo({ financialYear, fromDate, toDate, donationHead, paymentMode, trust: selectedTrust });
     setCurrentPage(1);
-    fetchReceipts(financialYear, fromDate, toDate, selectedTrust);
+    fetchReceipts(financialYear, fromDate, toDate, selectedTrust, donationHead, paymentMode);
   };
 
   // Filter and Sort Data
@@ -96,9 +142,20 @@ export default function ReceiptReportPage({ user: propUser }) {
     if (!isSubmitted) return [];
 
     let filtered = allData;
+
+    if (donationHead && donationHead !== 'All' && donationHead.trim()) {
+      const targetHead = donationHead.trim().toLowerCase();
+      filtered = filtered.filter(item => (item.donationHead || '').toLowerCase() === targetHead);
+    }
+
+    if (paymentMode && paymentMode !== 'All' && paymentMode.trim()) {
+      const targetMode = paymentMode.trim().toLowerCase();
+      filtered = filtered.filter(item => (item.paymentMode || '').toLowerCase() === targetMode);
+    }
+
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      filtered = allData.filter(item =>
+      filtered = filtered.filter(item =>
         (item.trustName && item.trustName.toLowerCase().includes(term)) ||
         (item.receiptNo && item.receiptNo.toLowerCase().includes(term)) ||
         (item.name && item.name.toLowerCase().includes(term)) ||
@@ -135,7 +192,7 @@ export default function ReceiptReportPage({ user: propUser }) {
     });
 
     return sorted;
-  }, [allData, isSubmitted, searchTerm, sortField, sortDirection]);
+  }, [allData, isSubmitted, donationHead, paymentMode, searchTerm, sortField, sortDirection]);
 
   // Pagination calculation
   const totalEntries = isSubmitted ? filteredAndSortedData.length : 0;
@@ -165,7 +222,7 @@ export default function ReceiptReportPage({ user: propUser }) {
     const headers = [
       'S.No',
       'Receipt No.',
-      'User / Trust',
+      ...(isSuperAdmin ? ['User / Trust'] : []),
       'Name',
       'Phone',
       'Donation Head',
@@ -184,7 +241,7 @@ export default function ReceiptReportPage({ user: propUser }) {
     const rows = dataToExport.map((r, idx) => [
       idx + 1,
       `"${r.receiptNo || ''}"`,
-      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
+      ...(isSuperAdmin ? [`"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`] : []),
       `"${r.name || ''}"`,
       `"${r.phone || ''}"`,
       `"${r.donationHead || 'General'}"`,
@@ -353,7 +410,9 @@ export default function ReceiptReportPage({ user: propUser }) {
             {isSubmitted && (
               <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
                 Showing results for <strong>{activeFilterInfo.financialYear}</strong>
-                {activeFilterInfo.trust ? ` | Trust: ${activeFilterInfo.trust}` : ' | All Trusts'}
+                {activeFilterInfo.trust ? ` | Trust: ${activeFilterInfo.trust}` : (isSuperAdmin ? ' | All Trusts' : '')}
+                {activeFilterInfo.donationHead ? ` | Head: ${activeFilterInfo.donationHead}` : ''}
+                {activeFilterInfo.paymentMode ? ` | Mode: ${activeFilterInfo.paymentMode}` : ''}
                 {activeFilterInfo.fromDate || activeFilterInfo.toDate
                   ? ` | Period: ${activeFilterInfo.fromDate || 'Start'} to ${activeFilterInfo.toDate || 'End'}`
                   : ' | Period: All Dates'}
@@ -397,6 +456,40 @@ export default function ReceiptReportPage({ user: propUser }) {
                 <option value="2023-2024">2023-2024</option>
                 <option value="2022-2023">2022-2023</option>
                 <option value="2021-2022">2021-2022</option>
+              </select>
+            </div>
+
+            <div className="report-field-group">
+              <label htmlFor="donationHeadSelect" className="report-field-label">
+                Donation Head
+              </label>
+              <select
+                id="donationHeadSelect"
+                value={donationHead}
+                onChange={(e) => setDonationHead(e.target.value)}
+                className="report-field-select"
+              >
+                <option value="">All Donation Heads</option>
+                {headsList.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="report-field-group">
+              <label htmlFor="paymentModeSelect" className="report-field-label">
+                Payment Mode
+              </label>
+              <select
+                id="paymentModeSelect"
+                value={paymentMode}
+                onChange={(e) => setPaymentMode(e.target.value)}
+                className="report-field-select"
+              >
+                <option value="">All Payment Modes</option>
+                {paymentModesList.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
               </select>
             </div>
 
@@ -459,7 +552,7 @@ export default function ReceiptReportPage({ user: propUser }) {
         <div style={{ fontSize: '14.5px', fontWeight: '700', color: '#212529', marginBottom: '14px' }}>
           {!isSubmitted
             ? 'Reports: -'
-            : `Reports: ${activeFilterInfo.financialYear}${activeFilterInfo.trust ? ` (${activeFilterInfo.trust})` : ''}${activeFilterInfo.fromDate || activeFilterInfo.toDate ? ` [${activeFilterInfo.fromDate || 'Start'} - ${activeFilterInfo.toDate || 'End'}]` : ''}`}
+            : `Reports: ${activeFilterInfo.financialYear}${activeFilterInfo.trust ? ` (${activeFilterInfo.trust})` : ''}${activeFilterInfo.donationHead ? ` [Head: ${activeFilterInfo.donationHead}]` : ''}${activeFilterInfo.paymentMode ? ` [Mode: ${activeFilterInfo.paymentMode}]` : ''}${activeFilterInfo.fromDate || activeFilterInfo.toDate ? ` [${activeFilterInfo.fromDate || 'Start'} - ${activeFilterInfo.toDate || 'End'}]` : ''}`}
         </div>
 
         {/* DataTables Controls: Show entries & Search */}
@@ -503,18 +596,19 @@ export default function ReceiptReportPage({ user: propUser }) {
             <input
               id="receiptSearchInput"
               type="text"
+              placeholder={isSuperAdmin ? "Search receipt no, donor, phone, trust..." : "Search receipt no, donor, phone, PAN, head..."}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
               style={{
-                padding: '4px 8px',
+                padding: '5px 10px',
                 border: '1px solid #ced4da',
                 borderRadius: '4px',
                 fontSize: '13px',
                 outline: 'none',
-                width: '180px'
+                width: '260px'
               }}
             />
           </div>
@@ -532,7 +626,7 @@ export default function ReceiptReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1930px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: isSuperAdmin ? '1930px' : '1750px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: '60px' }}>
@@ -541,9 +635,11 @@ export default function ReceiptReportPage({ user: propUser }) {
                 <th style={{ ...thStyle, width: '140px' }} onClick={() => handleSort('receiptNo')}>
                   Receipt No. {renderSortIndicator('receiptNo')}
                 </th>
-                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
-                  User / Trust {renderSortIndicator('trustName')}
-                </th>
+                {isSuperAdmin && (
+                  <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                    User / Trust {renderSortIndicator('trustName')}
+                  </th>
+                )}
                 <th style={{ ...thStyle, width: '170px' }} onClick={() => handleSort('name')}>
                   Name {renderSortIndicator('name')}
                 </th>
@@ -589,7 +685,7 @@ export default function ReceiptReportPage({ user: propUser }) {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={16}
+                    colSpan={isSuperAdmin ? 16 : 15}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -605,7 +701,7 @@ export default function ReceiptReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={16}
+                    colSpan={isSuperAdmin ? 16 : 15}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -623,7 +719,9 @@ export default function ReceiptReportPage({ user: propUser }) {
                   <tr key={row.receiptNo || idx}>
                     <td style={{ ...tdStyle, fontWeight: '600', color: '#475569' }}>{startIndex + idx + 1}</td>
                     <td style={tdStyle}>{row.receiptNo}</td>
-                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
+                    {isSuperAdmin && (
+                      <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
+                    )}
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>
                     <td style={tdStyle}>{row.phone || ''}</td>
                     <td style={tdStyle}>{row.donationHead || 'General'}</td>

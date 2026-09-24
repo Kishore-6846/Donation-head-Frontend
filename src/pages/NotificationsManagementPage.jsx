@@ -390,22 +390,24 @@ export default function NotificationsManagementPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="actions-cell">
                 <button
                   type="button"
-                  className="btn-table-action"
+                  className="action-btn action-btn-edit"
                   onClick={() => navigate(`/superadmin/new-notification?id=${n._id}`)}
                   title="Edit Announcement"
+                  aria-label="Edit Announcement"
                 >
-                  <Edit2 size={15} />
+                  <Edit2 size={13} />
                 </button>
                 <button
                   type="button"
-                  className="btn-table-action delete"
+                  className="action-btn action-btn-delete"
                   onClick={() => handleDeleteNotification(n)}
                   title="Delete Announcement"
+                  aria-label="Delete Announcement"
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>

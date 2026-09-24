@@ -160,7 +160,7 @@ export default function Form10BDReportPage({ user: propUser }) {
 
     const headers = [
       'S.No',
-      'User / Trust',
+      ...(isSuperAdmin ? ['User / Trust'] : []),
       'Pre Acknowledgement Number',
       'ID Code',
       'Unique Identification Number',
@@ -176,7 +176,7 @@ export default function Form10BDReportPage({ user: propUser }) {
 
     const rows = dataToExport.map((r, idx) => [
       r.srNo || idx + 1,
-      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
+      ...(isSuperAdmin ? [`"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`] : []),
       `"${r.preAckNo || ''}"`,
       `"${r.idCode || ''}"`,
       `"${r.uniqueIdNo || ''}"`,
@@ -532,18 +532,19 @@ export default function Form10BDReportPage({ user: propUser }) {
             <input
               id="reportSearchInput"
               type="text"
+              placeholder={isSuperAdmin ? "Search donor, URN, section code, trust..." : "Search donor name, URN, section code, mode..."}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
               style={{
-                padding: '4px 8px',
+                padding: '5px 10px',
                 border: '1px solid #ced4da',
                 borderRadius: '4px',
                 fontSize: '13px',
                 outline: 'none',
-                width: '180px'
+                width: '260px'
               }}
             />
           </div>
@@ -561,15 +562,17 @@ export default function Form10BDReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1780px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: isSuperAdmin ? '1780px' : '1600px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: '60px' }} onClick={() => handleSort('srNo')}>
                   S.No {renderSortIndicator('srNo')}
                 </th>
-                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
-                  User / Trust {renderSortIndicator('trustName')}
-                </th>
+                {isSuperAdmin && (
+                  <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                    User / Trust {renderSortIndicator('trustName')}
+                  </th>
+                )}
                 <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('preAckNo')}>
                   Pre Acknowledgement Number {renderSortIndicator('preAckNo')}
                 </th>
@@ -609,7 +612,7 @@ export default function Form10BDReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={isSuperAdmin ? 13 : 12}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -625,7 +628,7 @@ export default function Form10BDReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={isSuperAdmin ? 13 : 12}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -641,7 +644,7 @@ export default function Form10BDReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={isSuperAdmin ? 13 : 12}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -658,7 +661,9 @@ export default function Form10BDReportPage({ user: propUser }) {
                 paginatedData.map((row) => (
                   <tr key={row.srNo}>
                     <td style={tdStyle}>{row.srNo}</td>
-                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
+                    {isSuperAdmin && (
+                      <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
+                    )}
                     <td style={tdStyle}>{row.preAckNo || ''}</td>
                     <td style={tdStyle}>{row.idCode || ''}</td>
                     <td style={tdStyle}>{row.uniqueIdNo || ''}</td>

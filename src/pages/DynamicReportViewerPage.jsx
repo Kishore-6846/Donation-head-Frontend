@@ -79,7 +79,7 @@ export default function DynamicReportViewerPage() {
               showCancel: false,
               onConfirm: () => {
                 setPopup(p => ({ ...p, isOpen: false }));
-                navigate(isSuperAdmin ? '/superadmin/all-reports' : '/trust/superadmin-reports');
+                navigate(isSuperAdmin ? '/superadmin/reports-receipts' : '/trust/reports');
               }
             });
           } else {
@@ -376,7 +376,7 @@ export default function DynamicReportViewerPage() {
 
       <Breadcrumb
         items={[
-          { label: 'Reports', link: isSuperAdmin ? '/superadmin/all-reports' : '/trust/superadmin-reports' },
+          { label: 'Reports', link: isSuperAdmin ? '/superadmin/reports-receipts' : '/trust/reports' },
           { label: report.title }
         ]}
       />
@@ -703,7 +703,7 @@ export default function DynamicReportViewerPage() {
               <input
                 type="text"
                 className="trust-form-input trust-search-input"
-                placeholder="Search across all records..."
+                placeholder={report?.name ? `Search within ${report.name} records...` : "Search across report records..."}
                 value={searchTerm}
                 onChange={e => {
                   setSearchTerm(e.target.value);

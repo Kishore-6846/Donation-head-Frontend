@@ -826,39 +826,42 @@ export default function PlansManagementPage() {
                     </span>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <div className="actions-cell" style={{ justifyContent: 'center' }}>
                       <button
                         type="button"
-                        className="btn-table-action"
+                        className="action-btn action-btn-edit"
                         onClick={() => handleEditPlan(plan)}
                         title="Edit Plan"
+                        aria-label="Edit Plan"
                       >
-                        <Edit2 size={14} />
+                        <Edit2 size={13} />
                       </button>
                       <button
                         type="button"
-                        className="btn-table-action"
+                        className="action-btn action-btn-orange"
                         onClick={() => handleToggleStatus(plan)}
                         title={plan.status === 'Active' ? 'Deactivate' : 'Activate'}
+                        aria-label={plan.status === 'Active' ? 'Deactivate' : 'Activate'}
                       >
-                        {plan.status === 'Active' ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                        {plan.status === 'Active' ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
                       </button>
                       <button
                         type="button"
-                        className="btn-table-action"
-                        style={{ color: '#0284c7' }}
+                        className="action-btn action-btn-purple"
                         onClick={() => handleOpenTrustList(plan)}
                         title="View Subscribed Trusts & Plan Revenue"
+                        aria-label="View Subscribed Trusts"
                       >
-                        <Users size={14} />
+                        <Users size={13} />
                       </button>
                       <button
                         type="button"
-                        className="btn-table-action delete"
+                        className="action-btn action-btn-delete"
                         onClick={() => handleDeletePlan(plan)}
                         title="Delete Plan"
+                        aria-label="Delete Plan"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </td>

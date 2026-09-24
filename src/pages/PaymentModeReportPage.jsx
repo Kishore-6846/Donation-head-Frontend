@@ -169,7 +169,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
 
     const headers = [
       'S.No',
-      'User / Trust',
+      ...(isSuperAdmin ? ['User / Trust'] : []),
       'Receipt No.',
       'Name',
       'Pan Number',
@@ -184,7 +184,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
 
     const rows = dataToExport.map((r, idx) => [
       idx + 1,
-      `"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`,
+      ...(isSuperAdmin ? [`"${(r.trustName || 'Arulmigu Sivan Trust').replace(/"/g, '""')}"`] : []),
       `"${r.receiptNo || ''}"`,
       `"${r.name || ''}"`,
       `"${r.panNumber || ''}"`,
@@ -497,18 +497,19 @@ export default function PaymentModeReportPage({ user: propUser }) {
             <input
               id="modeSearchInput"
               type="text"
+              placeholder={isSuperAdmin ? "Search payment mode, receipt no, donor, trust..." : "Search payment mode, receipt no, donor, reference..."}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
               style={{
-                padding: '4px 8px',
+                padding: '5px 10px',
                 border: '1px solid #ced4da',
                 borderRadius: '4px',
                 fontSize: '13px',
                 outline: 'none',
-                width: '180px'
+                width: '260px'
               }}
             />
           </div>
@@ -526,15 +527,17 @@ export default function PaymentModeReportPage({ user: propUser }) {
             marginBottom: '16px'
           }}
         >
-          <table style={{ width: '100%', minWidth: '1700px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
+          <table style={{ width: '100%', minWidth: isSuperAdmin ? '1700px' : '1520px', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: '60px' }}>
                   S.No
                 </th>
-                <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
-                  User / Trust {renderSortIndicator('trustName')}
-                </th>
+                {isSuperAdmin && (
+                  <th style={{ ...thStyle, width: '180px' }} onClick={() => handleSort('trustName')}>
+                    User / Trust {renderSortIndicator('trustName')}
+                  </th>
+                )}
                 <th style={{ ...thStyle, width: '150px' }} onClick={() => handleSort('receiptNo')}>
                   Receipt No. {renderSortIndicator('receiptNo')}
                 </th>
@@ -571,7 +574,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               {!isSubmitted ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={isSuperAdmin ? 12 : 11}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -587,7 +590,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={isSuperAdmin ? 12 : 11}
                     style={{
                       textAlign: 'center',
                       padding: '24px',
@@ -603,7 +606,7 @@ export default function PaymentModeReportPage({ user: propUser }) {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={isSuperAdmin ? 12 : 11}
                     style={{
                       textAlign: 'center',
                       padding: '16px',
@@ -620,7 +623,9 @@ export default function PaymentModeReportPage({ user: propUser }) {
                 paginatedData.map((row, idx) => (
                   <tr key={row.receiptNo || idx}>
                     <td style={{ ...tdStyle, fontWeight: '600', color: '#475569' }}>{startIndex + idx + 1}</td>
-                    <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
+                    {isSuperAdmin && (
+                      <td style={{ ...tdStyle, color: '#047857', fontWeight: 600 }}>{row.trustName || 'Arulmigu Sivan Trust'}</td>
+                    )}
                     <td style={tdStyle}>{row.receiptNo}</td>
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{row.name}</td>
                     <td style={tdStyle}>{row.panNumber || ''}</td>

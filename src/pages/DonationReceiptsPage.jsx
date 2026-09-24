@@ -17,6 +17,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { getTrustSession, isSuperUser } from '../utils/authStorage';
+import { checkIsPlanExpired } from '../utils/planUtils';
 
 export default function DonationReceiptsPage({ user }) {
   const navigate = useNavigate();
@@ -51,6 +52,7 @@ export default function DonationReceiptsPage({ user }) {
   const isSuperAdmin = location.pathname.toLowerCase().startsWith('/superadmin');
   const trustSession = getTrustSession();
   const activeUser = (!isSuperUser(user) && user) || (!isSuperAdmin ? trustSession?.user : null) || {};
+  const isPlanExpired = !isSuperAdmin && checkIsPlanExpired(activeUser);
   const effectiveEmail = (activeUser?.email || '').trim();
   const effectiveTrustName = (
     (activeUser?.trustName && activeUser?.trustName !== 'DONATION RECEIPT SUPER ADMIN' ? activeUser.trustName : '') ||
@@ -303,7 +305,23 @@ export default function DonationReceiptsPage({ user }) {
           <button
             type="button"
             className="mint-btn-add"
-            onClick={() => navigate('/trust/new-donation-receipt')}
+            onClick={() => {
+              if (isPlanExpired) {
+                setPopup({
+                  isOpen: true,
+                  type: 'warning',
+                  title: 'Subscription Plan Expired',
+                  message: 'Your organization subscription plan has expired. Creating new donation receipts is paused until you renew. Please tap Upgrade to continue.',
+                  confirmText: 'Upgrade Subscription',
+                  onConfirm: () => {
+                    setPopup(p => ({ ...p, isOpen: false }));
+                    navigate('/trust/upgrade-plan');
+                  }
+                });
+                return;
+              }
+              navigate('/trust/new-donation-receipt');
+            }}
           >
             <Plus size={16} strokeWidth={3} />
             <span>Add New</span>
@@ -527,9 +545,11 @@ export default function DonationReceiptsPage({ user }) {
                     <div className="actions-cell">
                       {/* 1. Edit Button */}
                       <button
-                        className="action-btn"
+                        type="button"
+                        className="action-btn action-btn-edit"
                         title="Edit Receipt"
                         onClick={() => navigate(`/trust/edit-donation-receipt?pr_id=Mjk1NjIw&rid=${rec._id}`, { state: { receipt: rec } })}
+                        aria-label="Edit Receipt"
                       >
                         <Pencil size={12} />
                       </button>
@@ -539,7 +559,7 @@ export default function DonationReceiptsPage({ user }) {
                         href={`${rec.receiptNo ? `/api/receipts/pdf?receiptNo=${encodeURIComponent(rec.receiptNo)}` : `/api/receipts/pdf?id=${encodeURIComponent(rec._id)}`}${effectiveEmail ? `&trustEmail=${encodeURIComponent(effectiveEmail)}` : ''}${effectiveTrustName ? `&trustName=${encodeURIComponent(effectiveTrustName)}` : ''}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="action-btn"
+                        className="action-btn action-btn-view"
                         title="View & Print 80G Receipt PDF"
                         onClick={(e) => {
                           const url = `${rec.receiptNo
@@ -551,6 +571,7 @@ export default function DonationReceiptsPage({ user }) {
                             win.focus();
                           }
                         }}
+                        aria-label="View Receipt PDF"
                       >
                         <Eye size={12} />
                       </a>
@@ -558,7 +579,7 @@ export default function DonationReceiptsPage({ user }) {
                       {/* 3. Download Receipt PDF (Placed between View and Delete) */}
                       <button
                         type="button"
-                        className="action-btn"
+                        className="action-btn action-btn-download"
                         title="Download 80G Receipt PDF"
                         onClick={() => downloadReceiptPdfFile(rec)}
                         aria-label="Download Receipt PDF"
@@ -568,44 +589,44 @@ export default function DonationReceiptsPage({ user }) {
 
                       {/* 4. Delete / Inactivate */}
                       <button
-                        className="action-btn"
+                        type="button"
+                        className="action-btn action-btn-delete"
                         title={activeTab === 'Active' ? 'Move to Inactive' : 'Restore Receipt'}
                         onClick={() => handleToggleStatus(rec)}
+                        aria-label={activeTab === 'Active' ? 'Move to Inactive' : 'Restore Receipt'}
                       >
                         <Trash2 size={12} />
                       </button>
 
-                      {/* 5. WhatsApp Button (Only shown if mobile/phone is provided) */}
-                      {Boolean(rec.phone || rec.mobile) && (
-                        <button
-                          className="action-btn"
-                          title={`Share on WhatsApp with PDF (${rec.phone || rec.mobile})`}
-                          onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'whatsapp' })}
-                          aria-label="Share on WhatsApp"
+                      {/* 5. WhatsApp Button */}
+                      <button
+                        type="button"
+                        className="action-btn action-btn-whatsapp"
+                        title={rec.phone || rec.mobile ? `Share on WhatsApp with PDF (${rec.phone || rec.mobile})` : 'Share on WhatsApp with PDF'}
+                        onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'whatsapp' })}
+                        aria-label="Share on WhatsApp"
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          style={{ display: 'block' }}
                         >
-                          <svg
-                            width="13"
-                            height="13"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            style={{ display: 'block' }}
-                          >
-                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                          </svg>
-                        </button>
-                      )}
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                        </svg>
+                      </button>
 
-                      {/* 6. Email Button (Only shown if email is provided) */}
-                      {Boolean(rec.email) && (
-                        <button
-                          className="action-btn"
-                          title={`Send Receipt by Email with PDF Attached (${rec.email})`}
-                          onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'email' })}
-                          aria-label="Send Receipt by Email"
-                        >
-                          <Mail size={12} />
-                        </button>
-                      )}
+                      {/* 6. Email Button */}
+                      <button
+                        type="button"
+                        className="action-btn action-btn-email"
+                        title={rec.email ? `Send Receipt by Email with PDF Attached (${rec.email})` : 'Send Receipt by Email with PDF Attached'}
+                        onClick={() => setShareModal({ isOpen: true, receipt: rec, mode: 'email' })}
+                        aria-label="Send Receipt by Email"
+                      >
+                        <Mail size={12} />
+                      </button>
                     </div>
                   </td>
                   <td>

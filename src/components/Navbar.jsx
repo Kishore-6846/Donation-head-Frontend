@@ -240,13 +240,6 @@ export default function Navbar({ user, onLogout }) {
                     >
                       - Payment Mode Report
                     </Link>
-                    <Link
-                      to="/superadmin/new-report"
-                      className={`dropdown-item ${path.includes('new-report') || path.includes('create-report') ? 'active' : ''}`}
-                      onClick={() => setReportsOpen(false)}
-                    >
-                      - Create Report
-                    </Link>
                   </div>
                 )}
               </li>
@@ -506,13 +499,6 @@ export default function Navbar({ user, onLogout }) {
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       - Payment Mode Report
-                    </Link>
-                    <Link
-                      to="/superadmin/new-report"
-                      className="mobile-sub-link"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      - Create Report
                     </Link>
                   </div>
                 )}

@@ -324,11 +324,11 @@ export default function SuperAdminReportsPage() {
               {/* Filter controls */}
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                 {/* Search Bar */}
-                <div style={{ position: 'relative', minWidth: '220px' }}>
+                <div style={{ position: 'relative', minWidth: '260px' }}>
                   <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                   <input
                     type="text"
-                    placeholder="Search trust, email..."
+                    placeholder="Search trust name, admin, email, mobile..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="form-control"

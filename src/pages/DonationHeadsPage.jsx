@@ -420,19 +420,21 @@ export default function DonationHeadsPage({ user }) {
                     <div className="actions-cell">
                       <button
                         type="button"
-                        className="action-btn"
+                        className="action-btn action-btn-edit"
                         title="Edit"
                         onClick={() => navigate(isSuperAdmin ? `/superadmin/new-donation-head?id=${head._id}` : `/trust/new-donation-head?id=${head._id}`)}
+                        aria-label="Edit"
                       >
-                        <Pencil size={13} strokeWidth={2.5} />
+                        <Pencil size={13} />
                       </button>
                       <button
                         type="button"
-                        className="action-btn green-del"
+                        className="action-btn action-btn-delete"
                         title="Delete"
                         onClick={() => handleDeleteClick(head._id, head.name || head.rawName || '')}
+                        aria-label="Delete"
                       >
-                        <Trash2 size={13} strokeWidth={2.5} />
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </td>

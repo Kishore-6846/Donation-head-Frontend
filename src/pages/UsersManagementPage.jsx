@@ -716,38 +716,42 @@ export default function UsersManagementPage() {
                       )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <div className="actions-cell" style={{ justifyContent: 'center' }}>
                         <button
                           type="button"
-                          className="btn-table-action"
+                          className="action-btn action-btn-view"
                           onClick={() => navigate(`/superadmin/users/${u._id}`)}
                           title="View Trust Details & Statistics"
+                          aria-label="View Trust Details"
                         >
-                          <Eye size={14} />
+                          <Eye size={13} />
                         </button>
                         <button
                           type="button"
-                          className="btn-table-action"
+                          className="action-btn action-btn-edit"
                           onClick={() => navigate(`/superadmin/new-user?id=${u._id}`)}
                           title="Edit User Details"
+                          aria-label="Edit User Details"
                         >
-                          <Edit2 size={14} />
+                          <Edit2 size={13} />
                         </button>
                         <button
                           type="button"
-                          className="btn-table-action"
+                          className="action-btn action-btn-orange"
                           onClick={() => handleToggleStatus(u)}
                           title={u.status === 'Active' ? 'Suspend Trust' : 'Activate Trust'}
+                          aria-label={u.status === 'Active' ? 'Suspend Trust' : 'Activate Trust'}
                         >
-                          {u.status === 'Active' ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                          {u.status === 'Active' ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
                         </button>
                         <button
                           type="button"
-                          className="btn-table-action delete"
+                          className="action-btn action-btn-delete"
                           onClick={() => handleDeleteUser(u)}
                           title="Delete User"
+                          aria-label="Delete User"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </td>
